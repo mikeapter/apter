@@ -69,4 +69,11 @@ Platform/backend/.pytest_cache/
 
 # --- Optional: VS Code ---
 .vscode/
+# --- Platform (website/control-plane) ---
+Platform/runtime/
+Platform/api/.venv/
+Platform/api/.env
+Platform/web/.env.local
+Platform/web/node_modules/
+Platform/web/.next/
 
