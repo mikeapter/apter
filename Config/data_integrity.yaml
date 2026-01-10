@@ -1,0 +1,27 @@
+integrity:
+  timezone: "UTC"
+  latency_buffer_ms: 500
+
+  bars:
+    label: "bar_end"          # bar_end or bar_start
+    interval_seconds: 60
+    allow_pad_missing: true
+    pad_value: null           # null => NaN
+    forbid_synthetic_ohlc: true
+
+  filters:
+    forbid_negative_volume: true
+    forbid_crossed_quotes: true   # ask < bid
+    forbid_nonfinite: true
+    drop_duplicates: true
+
+  point_in_time:
+    require_known_ts: true
+    allow_latest_adjusted_history: false
+
+  survivorship:
+    require_survivorship_free_universe: true
+
+  reconstructed_data:
+    allow_in_backtests: false
+    min_integrity_grade: "B"   # A best, then B, C, D

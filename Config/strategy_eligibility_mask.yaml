@@ -1,0 +1,15 @@
+version: 1
+
+# Minimal dict-shaped config so StrategyEligibilityMask(cfg) does not crash.
+# Expand later with your real matrix.
+defaults:
+  allow_if_missing: true
+
+matrix:
+  NORMAL:
+    allow: ["OPENING_PLAYBOOK"]
+    block: []
+  DIRECTIONAL_EXPANSION:
+    allow: ["OPENING_PLAYBOOK"]
+    block: []
+

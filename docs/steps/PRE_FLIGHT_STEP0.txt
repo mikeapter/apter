@@ -1,0 +1,17 @@
+(
+echo STEP 0 — Pre-flight sign-off
+echo.
+echo Repo root confirmed: %CD%
+echo Must contain: App/ Core/ Config/ scripts/
+echo.
+echo WHAT I WILL NOT CHANGE (trading logic):
+echo - Core/ (risk, execution, alpha, throttles, guards)
+echo - Strategies/
+echo - Trading behavior configs (IPS, blackouts, risk limits)
+echo.
+echo WHAT I WILL CHANGE/ADD ONLY (website/control plane):
+echo - Platform/ (FastAPI control plane + Next.js UI)
+echo - scripts/ wrappers for start/stop/log streaming ONLY
+echo.
+echo Rule: UI never trades directly. UI calls API. API commands runtime.
+) > PRE_FLIGHT_STEP0.txt

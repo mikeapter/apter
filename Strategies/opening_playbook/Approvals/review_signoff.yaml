@@ -1,0 +1,12 @@
+date: "2025-12-14"
+reviewers:
+  - name: "CIO"
+    approved: true
+    notes: "Reviewed SSD + evidence; ok to proceed."
+  - name: "CTO"
+    approved: true
+    notes: "Implementation + controls acceptable."
+  - name: "CRO"
+    approved: true
+    notes: "Risk limits consistent with IPS."
+summary: "Strategy cleared for vote stage."

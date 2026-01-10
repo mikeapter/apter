@@ -1,0 +1,32 @@
+version: 1
+
+safe_mode:
+  # If any trigger is active, mode becomes ACTIVE and constraints apply.
+  state_file: "Config/execution_safe_mode_state.json"
+  events_file: "Config/execution_safe_mode_events.jsonl"
+
+  triggers:
+    volatility_spike:
+      enabled: true
+      # Demo default: trigger when regime_conf is "low confidence" proxy or external module flags
+      # (real version would use realized vol, VIX, spread widening, etc.)
+      min_regime_conf: 60
+
+    liquidity_vacuum:
+      enabled: true
+      # Real version would use spreads, depth, volume, halts
+      enabled_in_open_close: true
+
+    scheduled_event:
+      enabled: true
+      # Real version uses event_blackouts; keep here as secondary gate.
+      use_event_blackouts_module: true
+
+  actions:
+    # Applied when safe mode is ACTIVE
+    size_multiplier: 0.50
+    disable_passive: true
+    prefer_ioc: true
+    cancel_resting_orders: true
+    tighten_slippage_bps: 50
+    throttle_trades_per_minute: 1

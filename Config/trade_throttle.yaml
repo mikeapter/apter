@@ -1,0 +1,52 @@
+# STEP 12 — Trade frequency throttles + cooldowns (anti-overtrade controls)
+# Source: Strategy.pdf section 2.3.4 Trade Frequency Throttle
+version: 1
+
+timezone: "America/New_York"
+day_reset_hhmm: "09:30"   # treat trades before 09:30 as part of prior trading day
+
+# Persist throttle state so restarts don't reset limits
+state_file: "trade_throttle_state.json"
+
+# Urgency interaction:
+# - Urgency NEVER overrides max_trades_per_day by default (hard cap)
+# - Urgency CAN reduce cooldown (min time between trades) via multipliers
+urgency:
+  allow_urgency_override_max_trades_per_day: false
+  min_effective_cooldown_seconds: 0
+  cooldown_multiplier_by_tier:
+    default: 1.0
+    LOW: 1.0
+    NORMAL: 1.0
+    HIGH: 0.5
+    CRITICAL: 0.0
+
+regimes:
+  # safe default (unknown regime => don't trade)
+  default:
+    max_trades_per_day: 0
+    min_seconds_between_trades: 3600
+
+  DIRECTIONAL_EXPANSION:
+    max_trades_per_day: 20
+    min_seconds_between_trades: 120
+
+  DIRECTIONAL_COMPRESSION:
+    max_trades_per_day: 15
+    min_seconds_between_trades: 300
+
+  VOLATILITY_EXPANSION:
+    max_trades_per_day: 8
+    min_seconds_between_trades: 600
+
+  VOLATILITY_COMPRESSION:
+    max_trades_per_day: 12
+    min_seconds_between_trades: 300
+
+  LIQUIDITY_VACUUM:
+    max_trades_per_day: 0
+    min_seconds_between_trades: 999999
+
+  EVENT_DOMINATED:
+    max_trades_per_day: 0
+    min_seconds_between_trades: 999999

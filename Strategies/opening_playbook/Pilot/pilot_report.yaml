@@ -1,0 +1,9 @@
+date_start: "2025-12-14"
+date_end: "2025-12-27"
+mode: "paper"   # or "micro-live"
+notes: "Pilot limited scope + sizing. No expansion until pilot gates pass."
+results:
+  pnl: 0
+  max_drawdown: 0
+  slippage_bps_avg: 0
+  incidents: []

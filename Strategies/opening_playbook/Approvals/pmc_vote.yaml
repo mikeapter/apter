@@ -1,0 +1,13 @@
+date: "2025-12-14"
+yes: 3
+no: 1
+voters:
+  - name: "PMC Member 1"
+    vote: "yes"
+  - name: "PMC Member 2"
+    vote: "yes"
+  - name: "PMC Member 3"
+    vote: "yes"
+  - name: "PMC Member 4"
+    vote: "no"
+notes: "Majority vote required."

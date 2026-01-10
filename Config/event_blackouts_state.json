@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "shock_active_until_ts": null,
+  "shock_last_reason": "",
+  "saved_ts": 1767498592.2048862,
+  "module_version": "STEP18_EVENT_BLACKOUTS_FIX_V8_IGNORE_SESSION_AND_VACUUMS"
+}

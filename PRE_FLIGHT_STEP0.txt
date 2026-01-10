@@ -1,0 +1,15 @@
+STEP 0 - Pre-flight sign-off 
+ 
+Repo root confirmed: C:\Users\Michael\Desktop\BotTrader Files\BotTrader\BotTrader 
+Must contain: App/ Core/ Config/ scripts/ 
+ 
+WHAT I WILL NOT CHANGE (trading logic): 
+- Core/ (risk, execution, alpha, throttles, guards) 
+- Strategies/ 
+- Trading behavior configs (IPS, blackouts, risk limits) 
+ 
+WHAT I WILL CHANGE/ADD ONLY (website/control plane): 
+- Platform/ (FastAPI control plane + Next.js UI) 
+- scripts/ wrappers for start/stop/log streaming ONLY 
+ 
+Rule: UI never trades directly. UI calls API. API commands runtime.

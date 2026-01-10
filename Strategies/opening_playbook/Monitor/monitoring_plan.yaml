@@ -1,0 +1,32 @@
+checks:
+  - name: slippage_bps
+    rule: "alert_if_gt"
+    threshold: 15
+    window: "daily"
+
+  - name: fill_rate
+    rule: "alert_if_lt"
+    threshold: 0.90
+    window: "daily"
+
+  - name: latency_ms_p95
+    rule: "alert_if_gt"
+    threshold: 250
+    window: "daily"
+
+  - name: stopout_rate
+    rule: "alert_if_gt"
+    threshold: 0.60
+    window: "weekly"
+
+  - name: drawdown
+    rule: "halt_if_gt"
+    threshold: 0.10
+    window: "daily"
+
+actions:
+  - trigger: "halt_if_gt"
+    do:
+      - "set_registry_enabled_false"
+      - "log_incident"
+      - "require_review_restart"

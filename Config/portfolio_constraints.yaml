@@ -1,0 +1,26 @@
+version: 1
+
+portfolio:
+  default_policy: PROHIBIT
+
+  # Concentration / exposure caps
+  max_single_position_pct_nav: 0.25
+  max_sector_pct_nav: 0.45
+  max_gross_leverage: 1.50
+  max_net_leverage: 1.00
+
+  # Drawdown controls (soft/hard)
+  drawdown:
+    soft_dd_pct: 0.05
+    hard_dd_pct: 0.10
+    on_soft: REDUCE_RISK
+    on_hard: HALT
+
+  # VaR/ES caps (placeholder defaults; tune later)
+  var_es:
+    var_95_pct_nav: 0.02
+    es_95_pct_nav: 0.03
+
+  # When NAV is missing (e.g., PAPER/SIM), allow CLI overrides, otherwise block
+  require_nav: true
+  allow_demo_overrides: true

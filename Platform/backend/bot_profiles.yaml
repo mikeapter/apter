@@ -1,0 +1,13 @@
+profiles:
+  opening_one_shot:
+    cwd: "{REPO_ROOT}"
+    cmd: ["{PY}", "scripts/run_opening.py"]
+
+  system_eval_one_order:
+    cwd: "{REPO_ROOT}"
+    cmd: ["{PY}", "scripts/run_system.py", "--mode", "PAPER", "--symbol", "SPY", "--qty", "10",
+          "--strategy", "OPENING_PLAYBOOK", "--regime", "NORMAL", "--regime_conf", "0.8"]
+
+  monthly_tca:
+    cwd: "{REPO_ROOT}"
+    cmd: ["{PY}", "scripts/run_monthly_tca.py"]

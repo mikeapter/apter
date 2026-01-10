@@ -1,0 +1,12 @@
+backtest_sharpe: 1.4365173906791444
+backtest_max_drawdown: 0.27761749201670344
+backtest_years: 10.989733059548255
+backtest_includes_crisis: true
+backtest_slippage_variation_ratio: 1.0
+walkforward_oos_sharpe: 1.4372285677230237
+walkforward_oos_over_is_ratio: 1.0779180094877703
+walkforward_oos_max_drawdown: 0.2776174920167033
+mc_paths: 10000
+mc_sim_max_drawdown: 0.3157258683423369
+mc_prob_ruin: 0.0001
+mc_worst_case_monthly_return_p95: -0.05322774179190992
