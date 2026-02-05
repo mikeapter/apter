@@ -1,0 +1,6 @@
+version: 1
+default_action: "ALLOW"
+regimes:
+  UNKNOWN_REGIME:
+    allow: ["*"]
+  # Add your real regimes here if you want stricter control

@@ -1,0 +1,60 @@
+# STEP 19 — Portfolio constraints (IPS → code)
+# Conservative defaults. If you want the looser IPS.pdf limits (10% per symbol, 30% per sector),
+# adjust max_symbol_pct_nav / max_sector_pct_nav below.
+portfolio_constraints:
+  version: 1
+
+  concentration:
+    # IPS (fund IPS): 5% per position, 20% sector; IPS.pdf (system): 10% per symbol, 30% sector.
+    # We default to the stricter option for safety.
+    max_symbol_pct_nav: 0.05
+    max_sector_pct_nav: 0.20
+    max_country_pct_nav: 0.20
+    max_factor_pct_nav: 0.10
+    max_asset_class_pct_nav: 0.25
+
+  leverage:
+    gross_max_by_bucket:
+      NORMAL: 2.0
+      HIGH_VOL: 1.6
+      EVENT: 1.0
+      LIQUIDITY_VACUUM: 1.0
+      CRISIS: 0.5
+    net_max_abs: 1.5
+
+  var_es:
+    # If true, will BLOCK entries unless snapshot.risk_metrics or incremental inputs are supplied.
+    require_inputs: false
+    # Hard caps as fraction of NAV
+    var_95_max: 0.03
+    var_99_max: 0.05
+    # IPS.pdf ES(97.5%) guidance is ~4–5% NAV; fund IPS allows ES < 7% in normal markets.
+    es_97_5_max: 0.05
+    es_normal_max: 0.07
+    # numerical tolerance
+    eps: 1.0e-9
+
+    # Fallback parametric model (used only if no risk metrics are supplied)
+    default_daily_vol: 0.015
+    corr_same_sector: 0.60
+    corr_diff_sector: 0.30
+
+  drawdown:
+    # SOFT = tiered risk scaling (resize); HARD = block entries at hard_dd and halt at max_dd
+    mode: HARD
+    hard_dd: 0.15
+    max_dd: 0.20
+    default_risk_mult: 1.0
+    tiers:
+      - {min_dd: 0.00, max_dd: 0.05, risk_mult: 1.00}
+      - {min_dd: 0.05, max_dd: 0.10, risk_mult: 0.75}
+      - {min_dd: 0.10, max_dd: 0.15, risk_mult: 0.50}
+      - {min_dd: 0.15, max_dd: 0.20, risk_mult: 0.25}
+
+  risk_share:
+    # Strategy-level risk concentration (proxy: notional * daily_vol)
+    # Only enforce if you have multiple live strategies; otherwise a 1-strategy book would always breach.
+    min_strategies_for_cap: 2
+    strategy_risk_target: 0.30
+    strategy_risk_hard_cap: 0.40
+    default_daily_vol: 0.015

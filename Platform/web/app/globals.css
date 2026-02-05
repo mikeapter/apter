@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* globals.css — INSTITUTIONAL INTERACTION STANDARD
+   Restores Tailwind + enforces:
+   - No hover animations/effects
+   - No dopamine motion
+   - Deliberate click feedback (active only)
+*/
+
+:root {
+  --bg: #06102E;
+  --fg: #e5e7eb;
+  --muted: #9ca3af;
+  --panel: rgba(255,255,255,0.06);
+  --panel-border: rgba(255,255,255,0.10);
+  --focus: rgba(255,255,255,0.35);
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* ---------------------------------------------
+   1) ABSOLUTE PROHIBITION ON HOVER EFFECTS
+   --------------------------------------------- */
+@media (hover: hover) and (pointer: fine) {
+  a:hover,
+  button:hover,
+  [role="button"]:hover {
+    filter: none !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+}
+
+/* IMPORTANT:
+   Do NOT disable ALL transitions globally via "*" because it can break
+   some component libraries. We only block common “dopamine” motion below. */
+a, button, [role="button"] {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* Deliberate click feedback (no motion) */
+.institutional-interactive {
+  cursor: pointer;
+  user-select: none;
+}
+
+.institutional-interactive:active {
+  opacity: 0.92;
+}
+
+/* Links should be obvious without hover tricks */
+.institutional-link {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: inherit;
+}
+
+.institutional-link:active {
+  opacity: 0.92;
+}
+
+/* ---------------------------------------------
+   2) FOCUS (ACCESSIBLE, PROFESSIONAL)
+   --------------------------------------------- */
+:focus { outline: none; }
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}

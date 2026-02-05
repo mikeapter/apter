@@ -1,0 +1,44 @@
+# STEP 15 — Execution alpha: slippage minimization + execution selection
+
+# Strategy: "max acceptable slippage" baseline (bps)
+max_acceptable_slippage_bps: 5.0
+
+# If spread is wide, avoid crossing; use passive LIMIT (near mid)
+wide_spread_bps: 6.0
+
+# Prefer marketable limits over pure markets
+marketable_limit_offset_bps: 1.0
+urgent_marketable_limit_offset_bps: 2.0
+
+# Heuristic adds
+urgent_slippage_add_bps: 1.0
+
+# Large order rule:
+# if order_size > avg_volume_per_minute * 0.10 => algorithmic
+large_order_participation_threshold: 0.10
+default_avg_minute_volume: 10000
+
+# Volatility threshold to choose TWAP vs POV for large orders
+volatility_threshold: 0.012
+
+# TWAP settings
+twap_slices: 10
+twap_minutes: 5.0
+
+# VWAP settings (optional)
+vwap_slices: 12
+vwap_minutes: 10.0
+
+# POV settings
+pov_participation_rate: 0.15
+pov_minutes: 6.0
+
+# Iceberg settings
+iceberg_display_pct: 0.15
+
+# Expected slippage multipliers for algo methods
+algo_slippage_multiplier: 0.80
+iceberg_slippage_multiplier: 0.85
+
+# Slippage budgets (kill switch is enforced in SlippageTracker config in main wiring)
+# (kept here as "mental model"; actual budgets are in SlippageTracker init)

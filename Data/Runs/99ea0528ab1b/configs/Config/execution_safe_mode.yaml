@@ -1,0 +1,115 @@
+version: 1
+
+# Safe Mode triggers are based on a pre-trade "market snapshot" (quote + meta)
+# and are hysteresis-protected (so it doesn't flap on/off every tick).
+
+hysteresis:
+  min_seconds_in_level: 30         # don't downgrade before this minimum time in a level
+  exit_stable_seconds: 90          # require N seconds of "stable" conditions to downgrade
+
+thresholds:
+  # Spread widening -> risk of toxic microstructure
+  spread_bps:
+    pre_alert: 8
+    alert: 15
+    high_alert: 25
+
+  # Depth collapse (ratio vs normal) -> liquidity vacuum conditions
+  # (You pass depth_ratio in meta; 1.0 = normal, 0.3 = 70% collapse)
+  depth_ratio:
+    pre_alert: 0.60
+    alert: 0.40
+    high_alert: 0.25
+
+  # Volatility shock (z-score or spike proxy; you pass vol_z in meta)
+  vol_z:
+    pre_alert: 2.0
+    alert: 3.0
+    high_alert: 4.0
+
+  # Latency / execution plumbing risk
+  latency_ms:
+    alert: 150
+    outage: 1000
+
+  # Broker / venue instability proxy (you pass reject_rate in meta)
+  reject_rate:
+    alert: 0.15
+    high_alert: 0.30
+
+weights:
+  # Adds score if you flag event window in meta (macro/earnings/opex)
+  event_risk_points: 1
+
+score_to_level:
+  # total score -> level mapping
+  # 0 => NORMAL
+  # 1-2 => PRE_ALERT
+  # 3-5 => ALERT
+  # 6-8 => HIGH_ALERT
+  # 9+ => CRITICAL
+  pre_alert_min: 1
+  alert_min: 3
+  high_alert_min: 6
+  critical_min: 9
+
+actions:
+  NORMAL:
+    size_multiplier: 1.0
+    cooldown_multiplier: 1.0
+    max_trades_multiplier: 1.0
+    disable_passive: false
+    force_ioc: false
+    force_direct: false
+    cancel_resting: false
+    avoid_dark_pools: false
+    block_new_entries: false
+    require_exit_flag_for_orders: false
+
+  PRE_ALERT:
+    size_multiplier: 0.75
+    cooldown_multiplier: 1.5
+    max_trades_multiplier: 0.8
+    disable_passive: false
+    force_ioc: false
+    force_direct: false
+    cancel_resting: false
+    avoid_dark_pools: true
+    block_new_entries: false
+    require_exit_flag_for_orders: false
+
+  ALERT:
+    size_multiplier: 0.50
+    cooldown_multiplier: 2.0
+    max_trades_multiplier: 0.6
+    disable_passive: true
+    force_ioc: true
+    force_direct: true
+    cancel_resting: true
+    avoid_dark_pools: true
+    block_new_entries: false
+    require_exit_flag_for_orders: false
+
+  HIGH_ALERT:
+    size_multiplier: 0.35
+    cooldown_multiplier: 3.0
+    max_trades_multiplier: 0.4
+    disable_passive: true
+    force_ioc: true
+    force_direct: true
+    cancel_resting: true
+    avoid_dark_pools: true
+    block_new_entries: true
+    require_exit_flag_for_orders: false
+
+  CRITICAL:
+    size_multiplier: 0.25
+    cooldown_multiplier: 5.0
+    max_trades_multiplier: 0.2
+    disable_passive: true
+    force_ioc: true
+    force_direct: true
+    cancel_resting: true
+    avoid_dark_pools: true
+    block_new_entries: true
+    require_exit_flag_for_orders: true

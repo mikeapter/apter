@@ -1,0 +1,11 @@
+{"new_level": "CRITICAL", "prev_level": "NORMAL", "reasons": ["spread_high_bps=100.0", "depth_collapse_alert=0.35", "liquidity_vacuum_combo", "vol_alert_z=3.20", "event_window"], "score": 10, "side": "BUY", "symbol": "SPY", "ts": 1766957568.7148232, "type": "SAFE_MODE_LEVEL_CHANGE"}
+{"new_level": "ALERT", "prev_level": "NORMAL", "reasons": ["forced_level=ALERT"], "score": 999, "side": "BUY", "symbol": "SPY", "ts": 1766957748.108078, "type": "SAFE_MODE_LEVEL_CHANGE"}
+{"new_level": "ALERT", "prev_level": "ALERT", "reasons": ["forced_level=ALERT"], "score": 999, "side": "BUY", "symbol": "SPY", "ts": 1766957956.2793596, "type": "SAFE_MODE_LEVEL_CHANGE"}
+{"new_level": "ALERT", "prev_level": "ALERT", "reasons": ["forced_level=ALERT"], "score": 999, "side": "BUY", "symbol": "SPY", "ts": 1766958903.2901325, "type": "SAFE_MODE_LEVEL_CHANGE"}
+{"new_level": "ALERT", "prev_level": "ALERT", "reasons": ["forced_level=ALERT"], "score": 999, "side": "BUY", "symbol": "SPY", "ts": 1766959086.3388405, "type": "SAFE_MODE_LEVEL_CHANGE"}
+{"new_level": "ALERT", "prev_level": "ALERT", "reasons": ["forced_level=ALERT"], "score": 999, "side": "BUY", "symbol": "SPY", "ts": 1766959086.3575635, "type": "SAFE_MODE_LEVEL_CHANGE"}
+{"new_level": "ALERT", "prev_level": "ALERT", "reasons": ["forced_level=ALERT"], "score": 999, "side": "BUY", "symbol": "SPY", "ts": 1766959286.5166304, "type": "SAFE_MODE_LEVEL_CHANGE"}
+{"new_level": "ALERT", "prev_level": "ALERT", "reasons": ["forced_level=ALERT"], "score": 999, "side": "BUY", "symbol": "SPY", "ts": 1766959286.542005, "type": "SAFE_MODE_LEVEL_CHANGE"}
+{"new_level": "ALERT", "prev_level": "NORMAL", "reasons": ["forced_reason=TCA_DEGRADATION:avg_total_cost_bps=12>8", "forced_level=ALERT"], "score": 999, "side": "BUY", "symbol": "SPY", "ts": 1767145283.8749764, "type": "SAFE_MODE_LEVEL_CHANGE"}
+{"new_level": "ALERT", "prev_level": "ALERT", "reasons": ["forced_reason=TCA_DEGRADATION:avg_total_cost_bps=12>8", "forced_level=ALERT"], "score": 999, "side": "BUY", "symbol": "SPY", "ts": 1767153945.2765942, "type": "SAFE_MODE_LEVEL_CHANGE"}
+{"new_level": "ALERT", "prev_level": "ALERT", "reasons": ["forced_reason=TCA_DEGRADATION:avg_total_cost_bps=12>8", "forced_level=ALERT"], "score": 999, "side": "BUY", "symbol": "SPY", "ts": 1767154152.465787, "type": "SAFE_MODE_LEVEL_CHANGE"}

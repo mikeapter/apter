@@ -1,0 +1,16 @@
+stages_order:
+  - research
+  - paper
+  - live
+
+thresholds:
+  sharpe_min: 1.0
+  max_drawdown: 0.25
+
+required_artifacts:
+  research:
+    - backtest
+  paper:
+    - walkforward
+  live:
+    - monitoring

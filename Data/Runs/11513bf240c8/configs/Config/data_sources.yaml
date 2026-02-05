@@ -1,0 +1,60 @@
+# STEP 05 — Market data requirements + redundancy/failover
+
+policy:
+  heartbeat_seconds: 1
+  max_missed_heartbeats: 3
+  max_stale_seconds: 2
+  latency_warn_ms: 500
+  latency_outage_ms: 1000
+  failback:
+    enabled: false           # keep stable; you can enable later
+    cooldown_seconds: 60
+
+reconciliation:
+  l1_max_price_diff_bps: 10       # 0.10%
+  l1_max_age_diff_ms: 250
+  log_discrepancies: true
+
+feeds:
+  l1:
+    required: true
+    primary: polygon
+    secondary: iex
+  l2:
+    required: true
+    primary: dxfeed
+    secondary: bats
+  trades:
+    required: true
+    primary: polygon
+    secondary: iex
+  ohlcv:
+    required: true
+    primary: polygon
+    secondary: tiingo
+  options:
+    required: false
+    primary: dxfeed
+    secondary: polygon
+  corporate_actions:
+    required: true
+    primary: tiingo
+    secondary: polygon
+
+vendors:
+  polygon:
+    kind: http
+    env_api_key: POLYGON_API_KEY
+    base_url: "https://api.polygon.io"
+  iex:
+    kind: http
+    env_api_key: IEX_API_KEY
+    base_url: "https://cloud.iexapis.com"
+  dxfeed:
+    kind: stub
+  bats:
+    kind: stub
+  tiingo:
+    kind: http
+    env_api_key: TIINGO_API_KEY
+    base_url: "https://api.tiingo.com"

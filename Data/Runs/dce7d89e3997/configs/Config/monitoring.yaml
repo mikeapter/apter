@@ -1,0 +1,20 @@
+# STEP 21 — Monitoring + TCA + broker/venue review loop
+# Read by: Core/monitoring/monitoring_manager.py
+
+trade_log_relpath: "Data/Logs/trades.jsonl"
+reports_dir_relpath: "Data/Reports"
+
+# These state files are used by Step 17 (safe mode) and Step 15 (slippage kill-switch)
+safe_mode_state_relpath: "Config/execution_safe_mode_state.json"
+slippage_state_relpath: "Config/slippage_state.json"
+
+thresholds:
+  window_trades: 50
+  max_avg_total_cost_bps: 8.0
+  max_p90_is_bps: 15.0
+  max_avg_latency_ms: 250.0
+  warn_forced_safe_mode_level: "ALERT"
+  critical_forced_safe_mode_level: "CRITICAL"
+
+tca_monthly: true
+tca_monthly_min_trades: 30

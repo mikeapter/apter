@@ -267,3 +267,10 @@ class PortfolioConstraintsGate:
             return Decision(allowed=True, qty=max_qty, reason=reason, details=details, action="RESIZE")
 
         return Decision(allowed=True, qty=requested_qty, reason="OK", details={"requested_qty": requested_qty}, action="ALLOW")
+# ----------------------------
+# Backwards-compatibility aliases
+# ----------------------------
+
+from Core.decision import Decision
+
+PortfolioConstraintsDecision = Decision

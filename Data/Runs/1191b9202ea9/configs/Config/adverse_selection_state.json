@@ -1,0 +1,118 @@
+{
+  "passive_paused_until_ts": 1766964412.189608,
+  "aggressive_only_until_ts": 1766964292.2054296,
+  "block_entries_until_ts": 0.0,
+  "last_score": 68.66666666666667,
+  "last_action": "AGGRESSIVE_ONLY",
+  "last_reason": "score=68.7 >= aggr_thr(50.0) => aggressive_only 3.0m",
+  "recent": [
+    {
+      "ts": 1766953223.6518667,
+      "symbol": "SPY",
+      "side": "BUY",
+      "order_type": "MARKETABLE_LIMIT",
+      "fill_speed_s": 0.20000004768371582,
+      "post_fill_adverse_move_bps": -8.000000000000203,
+      "latency_ms": 40.0
+    },
+    {
+      "ts": 1766954101.1308992,
+      "symbol": "SPY",
+      "side": "BUY",
+      "order_type": "MARKETABLE_LIMIT",
+      "fill_speed_s": 0.20000004768371582,
+      "post_fill_adverse_move_bps": -8.000000000000577,
+      "latency_ms": 40.0
+    },
+    {
+      "ts": 1766954101.1382136,
+      "symbol": "SPY",
+      "side": "BUY",
+      "order_type": "MARKETABLE_LIMIT",
+      "fill_speed_s": 0.20000004768371582,
+      "post_fill_adverse_move_bps": -8.000000000000577,
+      "latency_ms": 40.0
+    },
+    {
+      "ts": 1766958903.3146594,
+      "symbol": "SPY",
+      "side": "BUY",
+      "order_type": "MARKETABLE_LIMIT",
+      "fill_speed_s": 0.20000004768371582,
+      "post_fill_adverse_move_bps": -8.000000000000501,
+      "latency_ms": 60.0
+    },
+    {
+      "ts": 1766959086.3534138,
+      "symbol": "SPY",
+      "side": "BUY",
+      "order_type": "MARKETABLE_LIMIT",
+      "fill_speed_s": 0.20000004768371582,
+      "post_fill_adverse_move_bps": -8.000000000000501,
+      "latency_ms": 60.0
+    },
+    {
+      "ts": 1766959086.3861318,
+      "symbol": "SPY",
+      "side": "BUY",
+      "order_type": "MARKETABLE_LIMIT",
+      "fill_speed_s": 0.20000004768371582,
+      "post_fill_adverse_move_bps": -8.000000000000501,
+      "latency_ms": 60.0
+    },
+    {
+      "ts": 1766959286.5376394,
+      "symbol": "SPY",
+      "side": "BUY",
+      "order_type": "MARKETABLE_LIMIT",
+      "fill_speed_s": 0.20000004768371582,
+      "post_fill_adverse_move_bps": -8.000000000000501,
+      "latency_ms": 60.0
+    },
+    {
+      "ts": 1766959286.5629857,
+      "symbol": "SPY",
+      "side": "BUY",
+      "order_type": "MARKETABLE_LIMIT",
+      "fill_speed_s": 0.20000004768371582,
+      "post_fill_adverse_move_bps": -8.000000000000501,
+      "latency_ms": 60.0
+    },
+    {
+      "ts": 1766964105.2691503,
+      "symbol": "SPY",
+      "side": "BUY",
+      "order_type": "MARKETABLE_LIMIT",
+      "fill_speed_s": 0.0036773681640625,
+      "post_fill_adverse_move_bps": -1.9996000799836056,
+      "latency_ms": 40.0
+    },
+    {
+      "ts": 1766964105.283726,
+      "symbol": "SPY",
+      "side": "BUY",
+      "order_type": "MARKETABLE_LIMIT",
+      "fill_speed_s": 0.0028743743896484375,
+      "post_fill_adverse_move_bps": -1.9996000799836056,
+      "latency_ms": 40.0
+    },
+    {
+      "ts": 1766964112.189608,
+      "symbol": "SPY",
+      "side": "BUY",
+      "order_type": "MARKETABLE_LIMIT",
+      "fill_speed_s": 0.004431247711181641,
+      "post_fill_adverse_move_bps": -1.9996000799836056,
+      "latency_ms": 40.0
+    },
+    {
+      "ts": 1766964112.2054296,
+      "symbol": "SPY",
+      "side": "BUY",
+      "order_type": "MARKETABLE_LIMIT",
+      "fill_speed_s": 0.0037965774536132812,
+      "post_fill_adverse_move_bps": -1.9996000799836056,
+      "latency_ms": 40.0
+    }
+  ]
+}

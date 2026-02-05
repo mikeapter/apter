@@ -1,0 +1,78 @@
+version: 1
+
+# ---------------------------------------
+# Base stop definition
+# ---------------------------------------
+base:
+  method: PCT        # PCT | ATR
+  stop_pct: 0.005    # 0.50% baseline stop width
+  atr_multiple: 1.5  # only used when method=ATR
+
+  # clamp stop width (as % of entry)
+  min_stop_pct: 0.002
+  max_stop_pct: 0.030
+
+# ---------------------------------------
+# STEP 11: Regime-based stop width modifier
+# (widen in worse regimes, or block in outage)
+# ---------------------------------------
+regime_multipliers:
+  RISK_ON: 1.00
+  RISK_OFF: 1.30
+  OUTAGE: 0.00
+  UNKNOWN: 1.15
+
+# ---------------------------------------
+# STEP 11: Liquidity buffer logic (spread-aware)
+# ---------------------------------------
+liquidity:
+  enabled: true
+
+  # if spread exceeds this, start widening the stop
+  widen_threshold_pct: 0.0015     # 0.15%
+  widen_slope: 0.75               # widening speed above threshold
+  max_widen_mult: 1.75            # cap widening
+
+  # optional: block if spread is insane
+  max_spread_pct: 0.020
+  block_if_spread_too_wide: false
+
+  # add an extra buffer in bps, based on spread
+  min_buffer_bps: 2.0
+  buffer_bps_per_spread_bps: 0.50
+  max_buffer_bps: 12.0
+
+# ---------------------------------------
+# Confidence multiplier (optional)
+# ---------------------------------------
+confidence:
+  enabled: true
+  min_conf: 0.20
+  max_conf: 0.80
+  floor_mult: 0.80
+  ceil_mult: 1.10
+
+# ---------------------------------------
+# STEP 11: Ensure max loss per trade is enforced
+# If qty is fixed, StopModule can cap it.
+# If you use STEP 10 sizing, risk is enforced there too.
+# ---------------------------------------
+max_loss:
+  enabled: true
+  risk_per_trade_pct: 0.0025
+
+  # match your sizing regimes if you want
+  regime_multipliers:
+    RISK_ON: 1.00
+    RISK_OFF: 0.50
+    OUTAGE: 0.00
+    UNKNOWN: 0.25
+
+  # hard cap (optional)
+  max_risk_usd: 750
+
+  strategies:
+    OPENING_CONTINUATION:
+      risk_per_trade_pct: 0.0030
+    OPENING_FADE:
+      risk_per_trade_pct: 0.0020

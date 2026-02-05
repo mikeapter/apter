@@ -1,0 +1,19 @@
+timezone: "America/New_York"
+market_calendar: "XNYS"
+
+open_close_avoidance:
+  # IPS open/close avoidance rule
+  avoid_minutes_after_open: 5
+  avoid_minutes_before_close: 5
+
+  # If false => OPEN/CLOSE windows will block new entries (REDUCE_ONLY by default)
+  allow_auction_participation: false
+
+  # Exits are allowed in REDUCE_ONLY windows (this is the “reduce-only” behavior)
+  exits_allowed: true
+
+shock_detection:
+  enabled: true
+  spread_bps_trigger: 50        # 50 bps triggers shock
+  cooldown_seconds: 300         # shock stays active for 5 minutes once triggered
+  force_safe_mode_level: "ALERT"

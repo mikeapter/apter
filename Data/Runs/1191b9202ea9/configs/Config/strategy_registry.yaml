@@ -1,0 +1,8 @@
+strategies:
+- strategy_id: opening_playbook
+  version: 1.0.0
+  stage: DEPLOY
+  enabled: false
+  config_ref: config/opening_playbook.yaml
+  owner: You
+  notes: Opening playbook strategy (gap/catalyst).

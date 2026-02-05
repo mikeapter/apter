@@ -1,0 +1,32 @@
+# Secrets / env
+.env
+Platform/api/.env
+
+# Runtime state & logs
+Platform/runtime/
+*.log
+
+# Local sqlite DB (dev)
+Platform/api/bottrader.db
+Platform/api/bottrader.db-*
+
+# Virtual environments
+.venv/
+venv/
+Platform/api/.venv/
+cli/.venv_platform/
+
+# Node
+node_modules/
+.next/
+out/
+dist/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db

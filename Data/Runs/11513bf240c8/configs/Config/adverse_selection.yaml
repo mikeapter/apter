@@ -1,0 +1,37 @@
+# STEP 16 — Adverse Selection Detection + Mitigation
+
+# Strategy detection knobs
+fast_fill_seconds: 0.5               # "fast fill on limit" threshold
+adverse_move_window_seconds: 5       # conceptual; your feed should measure ~+5s
+adverse_move_threshold_bps: 5.0      # 0.05% adverse move threshold (5 bps)
+
+# Latency / staleness defenses
+latency_ms_threshold: 50.0
+quote_age_ms_threshold: 250.0
+
+# Rolling scoring window
+rolling_window_fills: 50
+
+# Strategy scoring thresholds (0..100)
+warn_threshold: 35.0
+aggressive_only_threshold: 50.0
+pause_passive_threshold: 70.0
+
+# Mitigation timers
+aggressive_only_minutes: 3.0
+pause_passive_minutes: 5.0
+
+# Whether aggressive-only should force IOC behavior
+aggressive_only_force_ioc: true
+
+# "Don't post at obvious levels" — random tick offset when posting passively
+random_tick_offset_enabled: true
+random_tick_offset_min: 1
+random_tick_offset_max: 3
+
+# IPS-style optional gates (only used if meta provides these)
+p_adverse_selection_threshold: 0.55
+p_adverse_selection_score_add: 15.0
+
+toxicity_threshold: 0.70
+toxicity_score_add: 20.0

@@ -1,0 +1,52 @@
+version: 1
+
+# If a regime isn't listed, use this default:
+# - PROHIBIT = safest (block unless explicitly allowed)
+# - ALLOW    = permissive (allow unless explicitly prohibited)
+default_policy: PROHIBIT
+
+# If regime confidence is below this, block ALL strategies (hard gate)
+min_confidence_to_trade: 0.60
+
+# Strategy eligibility matrix (regime -> allow/prohibit lists)
+# Supports wildcards like "*" or "OPENING_*"
+regimes:
+  TREND_UP:
+    allow:
+      - OPENING_CONTINUATION
+      - TREND_FOLLOW
+    prohibit:
+      - OPENING_FADE
+      - MEAN_REVERSION
+
+  TREND_DOWN:
+    allow:
+      - OPENING_FADE
+      - TREND_FOLLOW
+    prohibit:
+      - OPENING_CONTINUATION
+      - MEAN_REVERSION
+
+  RANGE:
+    allow:
+      - MEAN_REVERSION
+      - OPENING_FADE
+    prohibit:
+      - TREND_FOLLOW
+      - OPENING_CONTINUATION
+
+  HIGH_VOL:
+    # example: allow only your safest/most controlled strategies
+    allow:
+      - MEAN_REVERSION
+    prohibit:
+      - OPENING_*
+      - TREND_FOLLOW
+
+  NEWS_SHOCK:
+    prohibit:
+      - "*"
+
+  OUTAGE:
+    prohibit:
+      - "*"

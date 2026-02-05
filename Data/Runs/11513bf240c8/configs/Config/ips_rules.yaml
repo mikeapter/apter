@@ -1,0 +1,141 @@
+# ips_rules.yaml
+# Purpose: Hard constraints (from IPS) that the bot MUST obey before placing any trade.
+# NOTE: Some numeric thresholds are left as placeholders (TODO) so you can set them explicitly.
+
+metadata:
+  document: "Investment Policy Statement (IPS)"
+  scope: "STEP 01 - universe + prohibitions + execution restrictions"
+  generated_on: "2025-12-14"
+
+universe:
+  eligible_asset_classes:
+    - equities
+    - etfs
+    - listed_options          # equity / index / ETF
+    - futures                # equity / rates / commodities / FX
+    - fx_spot
+    - fx_forwards
+    - volatility_derivatives # e.g., VIX futures/options
+    - macro_implied_instruments
+
+  crypto:
+    # IPS: "Crypto spot and derivatives (if permitted)"
+    allowed: false           # TODO: set true ONLY if explicitly permitted in your mandate
+    allowed_instruments:
+      - crypto_spot
+      - crypto_derivatives
+
+prohibited:
+  instruments:
+    - otc_penny_stocks
+    - illiquid_otc_derivatives_no_transparent_pricing
+    - binary_options
+
+  strategies_or_behaviors:
+    - algorithmic_behavior_designed_to_influence_market_prices
+    - naked_short_options
+    - excessive_leverage_beyond_risk_constraints  # risk caps are defined in STEP 02
+
+custody_and_assets:
+  rehypothecation:
+    allowed: false
+    override_requires_written_lp_authorization: true
+
+execution:
+  order_types:
+    allowed:
+      - market
+      - limit
+      - ioc
+      - fok
+      - twap
+      - vwap
+      - iceberg
+      - pegged
+      - stop_limit
+    disallowed:
+      - stop_market
+    preference:
+      # Prefer crossing with a price cap (marketable limit) vs pure market orders.
+      - marketable_limit_over_market
+
+  time_windows:
+    timezone: "America/New_York"     # exchange time for US equities; adjust per venue/asset
+    avoid:
+      - name: "open_first_5_minutes"
+        start: "09:30"
+        end: "09:35"
+      - name: "close_last_5_minutes"
+        start: "15:55"
+        end: "16:00"
+    auctions_exception:
+      allowed_only_if:
+        - strategy_requires_auction_participation
+        - liquidity_conditions_justify_it
+      audit_log_required: true
+
+  liquidity_guards:
+    # IPS: "No market orders in thinly traded assets"
+    thin_liquidity_rule:
+      block_market_orders_if_any_true:
+        - adv_usd <  __TODO_MIN_ADV_USD__
+        - top_of_book_usd < __TODO_MIN_TOP_OF_BOOK_USD__
+        - spread_bps > __TODO_MAX_SPREAD_BPS_FOR_MARKET__
+      notes: "Replace __TODO__ thresholds with explicit numbers."
+
+    # IPS: "No aggressive crossing during wide spreads"
+    wide_spread_rule:
+      define_wide_if_any_true:
+        - spread_bps > __TODO_WIDE_SPREAD_BPS__
+        - spread_bps > (__TODO_WIDE_SPREAD_MULTIPLIER__ * spread_bps_20d_avg)
+      action_when_wide:
+        - do_not_cross_spread_aggressively
+        - prefer_passive_or_wait
+      notes: "Replace __TODO__ thresholds with explicit numbers."
+
+  venues:
+    dark_pools:
+      enabled: true
+      allowed_only_if_all_true:
+        - venue_is_regulated
+        - sufficient_post_trade_transparency
+        - no_info_leakage_detected
+      approved_venues: []     # TODO: fill with explicit venue IDs/names
+      blocked_venues: []      # optional
+
+  best_execution:
+    standard:
+      - price_improvement
+      - low_market_impact
+      - reliable_fills
+      - minimal_slippage
+      - cross_venue_consistency
+
+    gates:
+      # Example IPS guardrail used in your checklist:
+      max_forecast_impact_bps: 20
+      max_interval_participation_pct: __TODO_MAX_INTERVAL_PARTICIPATION_PCT__
+      reject_if_any_true:
+        - forecast_impact_bps > max_forecast_impact_bps
+        - interval_participation_pct > max_interval_participation_pct
+
+  monitoring:
+    tca_required: true
+    broker_venue_review_on_persistent_underperformance: true
+
+compliance_gate:
+  # If true, ANY violation blocks the order (hard stop).
+  hard_block_on_violation: true
+
+  # What to log when blocking.
+  log_fields:
+    - timestamp
+    - strategy_id
+    - instrument
+    - asset_class
+    - order_type
+    - side
+    - qty
+    - venue
+    - reason_code
+    - rule_path

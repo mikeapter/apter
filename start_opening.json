@@ -1,0 +1,5 @@
+{
+  "script_rel": "scripts/run_opening.py",
+  "args": [],
+  "python": ".venv/Scripts/python.exe"
+}

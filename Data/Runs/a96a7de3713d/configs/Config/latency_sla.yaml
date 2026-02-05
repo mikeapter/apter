@@ -1,0 +1,25 @@
+latency_sla:
+  # Quote freshness (per symbol)
+  quote_age_ms:
+    warn: 250
+    outage: 1000
+
+  # Market data heartbeat from each feed (per feed name)
+  heartbeat_gap_ms:
+    warn: 1500
+    outage: 5000
+
+  # Order path (broker) timing (send->ack)
+  order_ack_ms:
+    warn: 750
+    outage: 2000
+
+  # Mode switching hysteresis (avoid flapping)
+  breaches_to_enter_warn: 2
+  breaches_to_enter_outage: 2
+  ok_samples_to_recover: 5
+
+  # Failover behavior
+  failover:
+    enabled: true
+    outage_grace_ms: 3000   # how long outage must persist before switching

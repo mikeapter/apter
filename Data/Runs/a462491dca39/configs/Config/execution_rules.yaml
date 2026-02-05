@@ -1,0 +1,53 @@
+# Execution standards & order-type rules (STEP 03)
+
+market_session:
+  timezone: "America/New_York"
+  open_time: "09:30"     # equities RTH default
+  close_time: "16:00"
+
+auction_avoidance:
+  avoid_minutes_after_open: 5
+  avoid_minutes_before_close: 5
+  # Exception only if strategy explicitly requires it AND liquidity conditions justify it.
+  allow_auction_participation: false
+
+best_execution:
+  # "Best execution" in code = enforce these gates before an order is sent:
+  # - minimal slippage, low impact, reliable fills, consistency, price improvement bias. :contentReference[oaicite:2]{index=2}
+  max_slippage_bps: 5
+  max_impact_bps: 20
+  min_fill_probability: 0.55
+  prefer_marketable_limits: true
+
+allowed_order_types:
+  - MARKET
+  - LIMIT
+  - MARKETABLE_LIMIT
+  - IOC
+  - FOK
+  - TWAP
+  - VWAP
+  - ICEBERG
+  - PEGGED
+  - STOP_LIMIT
+
+restrictions:
+  # IPS: stop-limit allowed, stop-market not allowed. :contentReference[oaicite:3]{index=3}
+  ban_stop_market: true
+
+  # IPS: No market orders in thinly traded assets. :contentReference[oaicite:4]{index=4}
+  thin_liquidity:
+    adv_min: 200000              # shares/contracts per day (set per asset class)
+    top_of_book_min: 1000        # minimum displayed size at best bid/ask
+    market_order_max_spread_bps: 8
+
+  # IPS: No aggressive crossing during wide spreads. :contentReference[oaicite:5]{index=5}
+  wide_spread_bps: 15
+
+  # Participation / impact gates (ties to best execution + IPS gates concept)
+  max_participation_rate: 0.10   # 10% interval volume baseline (tune later)
+
+algo_params:
+  iceberg_display_pct: 0.15      # show 15% of total
+  twap_default_minutes: 5
+  vwap_default_minutes: 10

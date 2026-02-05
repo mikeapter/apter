@@ -1,0 +1,35 @@
+version: 1
+
+base:
+  risk_per_trade_pct: 0.0025
+  min_stop_distance_pct: 0.001
+  qty_step: 1
+
+regime_multipliers:
+  RISK_ON: 1.00
+  RISK_OFF: 0.50
+  OUTAGE: 0.00
+  UNKNOWN: 0.00
+
+confidence:
+  enabled: true
+  min_conf: 0.20
+  max_conf: 0.80
+  floor_mult: 0.50
+  ceil_mult: 1.25
+
+clamps:
+  min_qty: 1
+  max_qty: 5000
+  min_notional_usd: 50
+  max_notional_usd: 25000
+  max_risk_usd: 750
+
+# Optional: strategy-specific sizing overrides
+strategies:
+  OPENING_CONTINUATION:
+    risk_per_trade_pct: 0.0030
+    strategy_mult: 1.10
+  OPENING_FADE:
+    risk_per_trade_pct: 0.0020
+    strategy_mult: 0.90

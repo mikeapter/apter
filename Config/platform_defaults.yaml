@@ -1,0 +1,25 @@
+platform:
+  # SIGNAL-ONLY platform. The product is an analytical tool, not an executor.
+  execution_mode: TOOL
+  bot_id: opening
+
+runtime:
+  # Signals generator entrypoint (no broker execution)
+  default_script: scripts/run_opening_tool.py
+  runtime_dir: Platform/runtime
+
+network:
+  api_port: 8000
+  web_port: 3000
+
+  # Production domain (canonical)
+  primary_domain: apterfinancial.com
+  canonical_url: https://apterfinancial.com
+
+security:
+  local_dev_api_key_policy:
+    storage: env_only
+    committed: false
+    rotation: manual
+    recommendation: store_in_password_manager
+

@@ -1,0 +1,73 @@
+# config/regime_engine.yaml
+engine:
+  confirm_periods: 5                 # Strategy: "5 periods minimum"
+  min_duration_seconds: 900          # IPS example: "minimum intraday regime duration = 15 minutes"
+  enter_confidence: 65               # must be >= to start transition
+  exit_confidence: 55                # used for “weak regime” handling (optional)
+  hysteresis_delta: 0.10             # candidate score must exceed current score by this margin
+  transition_block: true             # hard-block entries during transition zone
+
+votes:
+  weights:
+    rv_iv_divergence: 1.0
+    trend_persistence: 1.0
+    range_expansion: 0.8
+    liquidity: 1.2
+    event: 1.2
+    cross_asset: 0.6
+
+thresholds:
+  rv_iv_z:
+    high: 2.0
+    low: -2.0
+
+  trend:
+    alignment_expansion: 4
+    alignment_compression: 3
+    persistence_expansion: 1.5
+    persistence_compression: 1.0
+    alignment_ambiguous_max_abs: 1
+
+  range:
+    expansion_ratio_hi: 1.5
+    compression_ratio_lo: 0.8
+    range_pct_hi: 80
+    range_pct_lo: 40
+
+  liquidity:
+    spread_bps_max: 10          # IPS equities example
+    depth_usd_min: 50000        # IPS equities example (both sides)
+
+controls:
+  # What RCE outputs downstream (Gate 39+)
+  strategy_mask:
+    DIRECTIONAL_EXPANSION:
+      trend: 1.0
+      breakout: 1.2
+      mean_reversion: 0.0
+    DIRECTIONAL_COMPRESSION:
+      trend: 0.5
+      breakout: 0.3
+      mean_reversion: 1.0
+    VOLATILITY_EXPANSION:
+      trend: 0.6
+      breakout: 1.5
+      mean_reversion: 0.0
+    VOLATILITY_COMPRESSION:
+      trend: 0.4
+      breakout: 0.2
+      mean_reversion: 1.2
+    LIQUIDITY_VACUUM:
+      trend: 0.0
+      breakout: 0.0
+      mean_reversion: 0.0
+    EVENT_DOMINATED:
+      trend: 0.0
+      breakout: 0.0
+      mean_reversion: 0.0
+
+  # Optional: execution posture hints
+  execution_mode:
+    LIQUIDITY_VACUUM: "AGGRESSIVE_ONLY"
+    VOLATILITY_EXPANSION: "LIMITED_PASSIVE"
+    default: "NORMAL"

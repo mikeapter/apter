@@ -1,0 +1,8 @@
+{
+  "forced_level": "ALERT",
+  "forced_reason": "TCA_DEGRADATION:avg_total_cost_bps=12>8",
+  "forced_ts": 1767145283.82165,
+  "last_level_change_ts": 1767145283.8749764,
+  "level": "ALERT",
+  "since_ts": 1767145283.8749764
+}

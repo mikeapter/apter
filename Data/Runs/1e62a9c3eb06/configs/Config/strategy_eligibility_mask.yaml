@@ -1,0 +1,47 @@
+# Strategy Eligibility Mask (Hard Gate)
+# Default: deny unless explicitly allowed.
+default_policy: PROHIBIT
+
+# Confidence hard gate: if regime confidence is below this, block.
+min_confidence_to_trade: 0.60
+
+# If a regime label is unknown, fall back to this regime (must exist in `regimes:`)
+fallback_regime: RANGE
+
+# Aliases so your CLI flags can use higher-level labels (like RISK_ON)
+# and still map to your canonical regime taxonomy.
+regime_aliases:
+  RISK_ON: TREND_UP
+  RISK_OFF: HIGH_VOL
+
+# Regime → allow/prohibit lists.
+# Notes:
+# - "prohibit: ['*']" means block ALL strategies in that regime.
+# - If a strategy is in both allow and prohibit, prohibit wins.
+regimes:
+  TREND_UP:
+    allow:
+      - OPENING_PLAYBOOK
+    prohibit: []
+
+  TREND_DOWN:
+    allow: []
+    prohibit: []
+
+  RANGE:
+    allow: []
+    prohibit: []
+
+  HIGH_VOL:
+    allow: []
+    prohibit: []
+
+  NEWS_SHOCK:
+    allow: []
+    prohibit:
+      - "*"
+
+  OUTAGE:
+    allow: []
+    prohibit:
+      - "*"

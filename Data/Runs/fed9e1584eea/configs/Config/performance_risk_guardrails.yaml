@@ -1,0 +1,38 @@
+# performance + risk guardrails (Step 02)
+
+return_objectives:
+  rolling_sharpe_12m_min: 1.50
+  rolling_sortino_12m_min: 2.00
+  calmar_min: 1.00
+  monthly_hit_rate_min: 0.50
+
+risk_objectives:
+  daily_loss_limit_nav_pct: -5.0
+  var_95_1d_max_nav_pct: 3.0
+  vol_target_band_ann_pct: [10.0, 15.0]
+  max_drawdown_max_pct: 20.0
+  drawdown_risk_ladder:
+    "0-5":   1.00
+    "5-10":  0.75
+    "10-15": 0.50
+    "15-20": 0.25
+    "20+":   0.00
+
+tripwires:
+  intraday_restrict_nav_pct: -2.0
+  intraday_halt_nav_pct: -3.0
+  approach_factor: 0.80
+
+actions:
+  on_approach:
+    - reduce_new_position_risk_pct_by: 50
+    - reduce_gross_exposure_pct_by: 25
+    - block_new_entries_if_increases_var: true
+  on_restrict:
+    - allow_new_entries: false
+    - manage_exits_only: true
+    - reduce_open_risk_pct_by: 50
+  on_breach:
+    - cancel_all_orders: true
+    - flatten_positions: true
+    - disable_trading_until_manual_reset: true

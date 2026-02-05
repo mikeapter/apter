@@ -1,0 +1,50 @@
+# config/opening_playbook.yaml
+
+universe:
+  min_price: 1.00
+  max_price: 1000000.0
+  min_avg_daily_volume: 2000000
+  symbols:
+    - SPY
+    - QQQ
+    - AAPL
+    - MSFT
+    - NVDA
+    - TSLA
+
+premarket_filters:
+  gap_abs_min_pct: 0.02
+  premarket_volume_min: 100000
+  require_catalyst: true
+  max_spread_pct: 0.01
+
+state_rules:
+  fade_gap_abs_pct: 0.04
+  continuation_gap_abs_pct: 0.02
+  no_trade_gap_abs_pct: 0.00
+
+execution:
+  tick_ms: 50
+  opening_range_seconds: 15
+  max_spread_pct: 0.002
+  min_rel_volume: 1.20
+
+risk:
+  max_qty: 10
+  max_slippage_bps: 10            # 10 bps = 0.10%
+  stop_distance_pct: 0.005
+  kill_after_seconds: 180
+
+position_mgmt:
+  partials_R:
+    - 0.50
+    - 1.00
+  move_stop_to_breakeven_after_first_partial: true
+  loser_kill_R: -0.25
+  time_stop_seconds: 120
+account:
+  equity_usd: 100000
+
+regime:
+  label: RISK_ON
+  confidence: 0.75

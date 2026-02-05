@@ -213,3 +213,11 @@ def load_strategy_eligibility_mask(path: str | Path) -> StrategyEligibilityMask:
     Backwards-compatible loader expected by unit tests.
     """
     return StrategyEligibilityMask.from_yaml(path)
+# ----------------------------
+# Backwards-compatibility aliases
+# ----------------------------
+
+# Older tests / modules expect these names
+EligibilityDecision = Decision
+EligibilityMask = StrategyEligibilityMask
+

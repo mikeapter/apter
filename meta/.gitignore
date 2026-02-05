@@ -1,0 +1,35 @@
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv/
+venv/
+
+# --- Pytest ---
+.pytest_cache/
+
+# --- Node / Next.js ---
+node_modules/
+.next/
+.env.local
+
+# --- Platform runtime ---
+Platform/runtime/
+Data/Logs/
+Data/Runs/
+Data/Reports/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Scratch / notes ---
+notes/
+scratch/
+meta/
+
+# --- CLI / temp ---
+cli/
+start_opening.json

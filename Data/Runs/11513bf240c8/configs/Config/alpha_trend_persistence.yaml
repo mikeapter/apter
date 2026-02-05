@@ -1,0 +1,33 @@
+# config/alpha_trend_persistence.yaml
+
+enabled: true
+
+timeframes: ["1m", "5m", "15m", "1h", "4h", "1d"]
+
+# Per Strategy doc
+weights: [0.05, 0.10, 0.15, 0.25, 0.25, 0.20]
+
+# Indicator params (not specified in doc; these are sane defaults)
+ema_fast_period: 20
+atr_period: 14
+
+# Score scaling:
+# trend_alignment is in [-1, +1] because weights sum to 1 and we use sign(trend_strength).
+# Multiply by 10 to produce a 0-10 magnitude output (as doc specifies).
+score_scale_to_10: 10.0
+
+# Thresholds (exact from Strategy doc)
+weak_threshold: 1.0
+strong_threshold: 2.5
+
+# Regime factor table (re-using Strategy doc's regime multipliers table)
+# DIRECTIONAL_EXPANSION: 1.0
+# DIRECTIONAL_COMPRESSION: 0.6
+# VOLATILITY_EXPANSION: 0.5
+# VOLATILITY_COMPRESSION: 0.8
+# LIQUIDITY_VACUUM: 0.0
+# EVENT_DOMINATED: 0.0
+use_regime_factor_table: true
+
+# Optional: apply Strategy confidence adjustment (same section as size multiplier)
+use_regime_confidence_adjustment: true

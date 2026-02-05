@@ -1,0 +1,53 @@
+# Strategy Governance Lifecycle (IPS-aligned)
+# Enforced by strategy_governance.py
+
+thresholds:
+  backtest:
+    sharpe_min: 1.0
+    max_drawdown_max: 0.30
+  walkforward:
+    oos_sharpe_min: 0.7
+  monte_carlo:
+    paths_min: 10000
+    sim_max_drawdown_max: 0.20
+    prob_ruin_max: 0.01
+    worst_case_monthly_return_p95_min: -0.10
+  pilot:
+    min_trading_days: 10
+
+stages_order:
+  - DESIGN
+  - TEST
+  - REVIEW
+  - VOTE
+  - PILOT
+  - DEPLOY
+  - MONITOR
+  - RETIRE
+
+required_artifacts:
+  DESIGN:
+    - SSD.md
+
+  TEST:
+    - evidence/metrics.yaml
+
+  REVIEW:
+    - approvals/review_signoff.yaml
+
+  VOTE:
+    - approvals/pmc_vote.yaml
+    - approvals/compliance_signoff.yaml
+
+  PILOT:
+    - pilot/pilot_report.yaml
+
+  DEPLOY:
+    - deploy/deploy_plan.md
+    - monitor/monitoring_plan.yaml
+
+  MONITOR:
+    - monitor/monitoring_plan.yaml
+
+  RETIRE:
+    - retire/retirement_report.md

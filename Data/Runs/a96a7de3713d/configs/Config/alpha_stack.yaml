@@ -1,0 +1,58 @@
+# config/alpha_stack.yaml
+# STEP 13 — Alpha Source Stack gate config (DEMO-FRIENDLY DEFAULTS)
+
+gate:
+  # If you're currently blocking everything, this is almost always too high.
+  # Set low for demo; raise later when modules have real inputs.
+  min_total_score: 0.50
+
+  # Confidence is often 0.0–1.0. Keep permissive for now.
+  min_confidence: 0.00
+
+  # Require at least one module to be active (prevents "allow always")
+  require_any_active: true
+
+  # If your AlphaStack supports "allow_on_neutral", keep false for now.
+  allow_on_neutral: false
+
+modules:
+  # You can leave these enabled; missing inputs should just make them inactive/0 score.
+  trend_persistence:
+    enabled: true
+    weight: 1.00
+    min_score: 0.25
+
+  volatility_expansion:
+    enabled: true
+    weight: 0.75
+    min_score: 0.25
+
+  mean_reversion:
+    enabled: true
+    weight: 0.75
+    min_score: 0.25
+
+  intraday_seasonality:
+    enabled: true
+    weight: 0.25
+    min_score: 0.10
+
+  queue_position:
+    enabled: true
+    weight: 0.50
+    min_score: 0.10
+
+  spread_capture:
+    enabled: true
+    weight: 0.25
+    min_score: 0.10
+
+  slippage_min:
+    enabled: true
+    weight: 0.25
+    min_score: 0.10
+
+  adverse_selection:
+    enabled: true
+    weight: 0.25
+    min_score: 0.10

@@ -1,0 +1,44 @@
+# STEP 20 — Backtesting + Walk-Forward + Monte Carlo “promotion gates”
+# IPS-aligned standards and run settings.
+
+backtest:
+  min_years: 5
+  # Must include at least one major crisis period (IPS examples: 2008, 2020).
+  # Your data must overlap at least one window below.
+  crisis_periods:
+    - name: GFC_2008
+      start: "2008-09-01"
+      end: "2009-06-30"
+    - name: COVID_2020
+      start: "2020-02-15"
+      end: "2020-05-15"
+
+  # Cost model (keep simple; you can refine later)
+  costs:
+    commission_per_share: 0.0000
+    slippage_bps: 1.0
+    borrow_fee_annual: 0.00
+
+  # Used for Sharpe scaling if your returns are daily.
+  periods_per_year: 252
+
+  # IPS: “Slippage variation < 50% deviation vs historical norms”
+  # We approximate via a ratio vs expected slippage.
+  slippage_variation_max_ratio: 1.50
+
+walk_forward:
+  train_years: 3
+  test_months: 6
+  overlap: true
+  # IPS model validation: OOS > 60% of IS.
+  min_oos_over_is_ratio: 0.60
+
+monte_carlo:
+  paths: 10000
+  block_size_days: 5
+  # IPS: probability of ruin (<50% NAV loss) ≤ 1%
+  ruin_floor_nav: 0.50
+
+  # IPS: 95% worst-case monthly return > -10%
+  # We interpret “worst-case at 95% confidence” as 5th percentile monthly return.
+  monthly_tail_alpha: 0.05
