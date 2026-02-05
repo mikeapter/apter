@@ -2,79 +2,91 @@
 @tailwind components;
 @tailwind utilities;
 
-/* globals.css — INSTITUTIONAL INTERACTION STANDARD
-   Restores Tailwind + enforces:
-   - No hover animations/effects
-   - No dopamine motion
-   - Deliberate click feedback (active only)
-*/
-
+/* ================================
+   Institutional Design Tokens
+   Company Background (EXACT):
+   - HEX: #000023
+   - RGB: (0, 0, 35)
+   ================================ */
 :root {
-  --bg: #06102E;
-  --fg: #e5e7eb;
-  --muted: #9ca3af;
-  --panel: rgba(255,255,255,0.06);
-  --panel-border: rgba(255,255,255,0.10);
-  --focus: rgba(255,255,255,0.35);
+  --background-hex: #000023;
+
+  /* #000023 in HSL (exact/near-exact) */
+  --background: 240 100% 6.9%;
+
+  /* Panels/cards slightly lighter than background for contrast */
+  --panel: 240 55% 9.5%;
+  --panel-2: 240 50% 11%;
+  --card: 240 55% 9.5%;
+  --card-foreground: 210 12% 90%;
+
+  /* Text */
+  --foreground: 210 12% 90%;
+  --muted: 240 45% 10.5%;
+  --muted-foreground: 215 10% 66%;
+
+  /* Lines / focus (subtle, navy-tinted) */
+  --border: 240 28% 18%;
+  --input: 240 28% 18%;
+  --ring: 240 22% 34%;
+
+  /* Risk-state accents (muted) */
+  --risk-on: 152 22% 32%;
+  --risk-neutral: 42 30% 38%;
+  --risk-off: 0 28% 38%;
 }
 
-html, body {
+html,
+body {
   height: 100%;
 }
 
-body {
-  background: var(--bg);
-  color: var(--fg);
-}
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
 
-/* ---------------------------------------------
-   1) ABSOLUTE PROHIBITION ON HOVER EFFECTS
-   --------------------------------------------- */
-@media (hover: hover) and (pointer: fine) {
-  a:hover,
-  button:hover,
-  [role="button"]:hover {
-    filter: none !important;
-    transform: none !important;
-    box-shadow: none !important;
+  body {
+    background-color: var(--background-hex);
+    @apply text-foreground;
+    font-variant-numeric: tabular-nums;
   }
 }
 
-/* IMPORTANT:
-   Do NOT disable ALL transitions globally via "*" because it can break
-   some component libraries. We only block common “dopamine” motion below. */
-a, button, [role="button"] {
-  transition: none !important;
-  animation: none !important;
-}
+/* Component primitives */
+@layer components {
+  .bt-panel {
+    @apply rounded-md border bg-card text-card-foreground;
+  }
 
-/* Deliberate click feedback (no motion) */
-.institutional-interactive {
-  cursor: pointer;
-  user-select: none;
-}
+  .bt-panel-title {
+    @apply text-[11px] font-semibold uppercase tracking-[0.22em] text-foreground;
+  }
 
-.institutional-interactive:active {
-  opacity: 0.92;
-}
+  .bt-kicker {
+    @apply text-xs text-muted-foreground;
+  }
 
-/* Links should be obvious without hover tricks */
-.institutional-link {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  color: inherit;
-}
+  /* NOTE: keeping your existing class; background is controlled by tokens above */
+  .bt-button {
+    @apply inline-flex items-center justify-center rounded-md border border-border bg-transparent px-3 py-2 text-sm font-medium;
+  }
 
-.institutional-link:active {
-  opacity: 0.92;
-}
+  .bt-input {
+    @apply w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/40;
+  }
 
-/* ---------------------------------------------
-   2) FOCUS (ACCESSIBLE, PROFESSIONAL)
-   --------------------------------------------- */
-:focus { outline: none; }
-
-:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+  .bt-chip {
+    @apply inline-flex items-center gap-2 rounded-sm border bg-panel-2 px-2.5 py-0.5 text-[11px] font-medium;
+  }
+  .bt-chip-on {
+    @apply border-risk-on/40 text-risk-on;
+  }
+  .bt-chip-neutral {
+    @apply border-risk-neutral/40 text-risk-neutral;
+  }
+  .bt-chip-off {
+    @apply border-risk-off/40 text-risk-off;
+  }
 }
