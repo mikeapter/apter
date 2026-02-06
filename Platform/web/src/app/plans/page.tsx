@@ -1,221 +1,231 @@
 // Platform/web/src/app/plans/page.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import {
-  API_BASE_URL,
-  devSetTier,
-  getMySubscription,
-  getPlans,
-  getSignalsFeed,
-  login,
-  register,
-} from "@/lib/api";
+import { useEffect, useMemo, useState } from "react";
+import { devSetTier, getMySubscription, getPlans, getSignalsFeed, login, register } from "@/lib/api";
 
-type AnyObj = Record<string, any>;
+type Plan = {
+  id?: number;
+  code?: string;
+  name: string;
+  description?: string;
+  price_monthly?: number;
+  realtime?: boolean;
+  history_days?: number;
+  analytics_level?: string;
+};
+
+type FeedItem = {
+  symbol?: string;
+  action?: string;
+  confidence?: string;
+  ts?: string;
+};
+
+const TOKEN_KEY = "apter_token";
 
 export default function PlansPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [adminKey, setAdminKey] = useState("dev");
 
-  const [token, setToken] = useState<string>("");
-  const [plans, setPlans] = useState<AnyObj | null>(null);
-  const [subscription, setSubscription] = useState<AnyObj | null>(null);
-  const [signals, setSignals] = useState<AnyObj | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [devKey, setDevKey] = useState("dev");
 
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string>("");
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [plansErr, setPlansErr] = useState<string>("");
+
+  const [me, setMe] = useState<any>(null);
+  const [meErr, setMeErr] = useState<string>("");
+
+  const [feed, setFeed] = useState<FeedItem[]>([]);
+  const [feedErr, setFeedErr] = useState<string>("");
+
+  const isLoggedIn = useMemo(() => !!token, [token]);
 
   useEffect(() => {
-    const t = localStorage.getItem("apter_token") || "";
-    setToken(t);
+    const t = localStorage.getItem(TOKEN_KEY);
+    if (t) setToken(t);
   }, []);
 
-  const authed = useMemo(() => !!token, [token]);
-
-  async function loadPlansAndSignals(currentToken?: string) {
-    setMsg("");
-    try {
-      const p = await getPlans();
-      setPlans(p as AnyObj);
-    } catch (e: any) {
-      setPlans({ error: e?.message || "Failed to load plans" });
-    }
-
-    try {
-      const s = await getSignalsFeed(5, currentToken || token || undefined);
-      setSignals(s as AnyObj);
-    } catch (e: any) {
-      setSignals({ error: e?.message || "Failed to load signals" });
-    }
-  }
-
-  async function loadSubscription(currentToken?: string) {
-    const t = currentToken || token;
-    if (!t) {
-      setSubscription({ detail: "Not authenticated" });
-      return;
-    }
-    try {
-      const sub = await getMySubscription(t);
-      setSubscription(sub as AnyObj);
-    } catch (e: any) {
-      setSubscription({ error: e?.message || "Failed to load subscription" });
-    }
-  }
+  useEffect(() => {
+    loadPlans();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
-    loadPlansAndSignals(token || undefined);
-    loadSubscription(token || undefined);
+    if (token) {
+      loadMe(token);
+      loadFeed(token);
+    } else {
+      setMe(null);
+      setMeErr("Not authenticated");
+      setFeed([]);
+      setFeedErr("Login required for feed preview");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  async function onRegister() {
-    setLoading(true);
-    setMsg("");
+  async function loadPlans() {
+    setPlansErr("");
     try {
-      await register(email, password);
-      setMsg("Registered successfully. Now click Login.");
+      const data = await getPlans();
+      const arr = Array.isArray(data) ? (data as Plan[]) : [];
+      setPlans(arr);
     } catch (e: any) {
-      setMsg(e?.message || "Register failed");
-    } finally {
-      setLoading(false);
+      setPlans([]);
+      setPlansErr(e?.message || "Failed to load plans");
+    }
+  }
+
+  async function loadMe(t: string) {
+    setMeErr("");
+    try {
+      const data = await getMySubscription(t);
+      setMe(data);
+    } catch (e: any) {
+      setMe(null);
+      setMeErr(e?.message || "Failed to load current subscription");
+    }
+  }
+
+  async function loadFeed(t: string) {
+    setFeedErr("");
+    try {
+      const data: any = await getSignalsFeed(5, t);
+      const items = Array.isArray(data) ? data : data?.items || [];
+      setFeed(items);
+    } catch (e: any) {
+      setFeed([]);
+      setFeedErr(e?.message || "Failed to load feed");
+    }
+  }
+
+  async function onRegister() {
+    try {
+      await register(email.trim(), password);
+      alert("Registered. Now click Login.");
+    } catch (e: any) {
+      alert(e?.message || "Register failed");
     }
   }
 
   async function onLogin() {
-    setLoading(true);
-    setMsg("");
     try {
-      const res = (await login(email, password)) as AnyObj;
-      const t = res?.access_token || res?.token;
-      if (!t) throw new Error("No access token returned");
-      localStorage.setItem("apter_token", t);
+      const out = await login(email.trim(), password);
+      const t = out?.access_token;
+      if (!t) throw new Error("No token returned");
+      localStorage.setItem(TOKEN_KEY, t);
       setToken(t);
-      setMsg("Login successful.");
     } catch (e: any) {
-      setMsg(e?.message || "Login failed");
-    } finally {
-      setLoading(false);
+      alert(e?.message || "Login failed");
     }
   }
 
   function onLogout() {
-    localStorage.removeItem("apter_token");
-    setToken("");
-    setSubscription({ detail: "Not authenticated" });
-    setMsg("Logged out.");
+    localStorage.removeItem(TOKEN_KEY);
+    setToken(null);
   }
 
-  async function onSetTier(tier: "free" | "analyst" | "pro") {
+  async function onSwitchTier(nextTier: string) {
     if (!token) {
-      setMsg("Login first.");
+      alert("Login first");
       return;
     }
-    setLoading(true);
-    setMsg("");
     try {
-      await devSetTier(token, tier, adminKey);
-      await loadSubscription(token);
-      setMsg(`Tier switched to ${tier.toUpperCase()}.`);
+      await devSetTier(nextTier, devKey, token);
+      await loadMe(token);
+      await loadFeed(token);
+      alert(`Tier switched to ${nextTier}`);
     } catch (e: any) {
-      setMsg(e?.message || "Tier switch failed");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function onRefreshFeed() {
-    setLoading(true);
-    setMsg("");
-    try {
-      const s = await getSignalsFeed(5, token || undefined);
-      setSignals(s as AnyObj);
-      setMsg("Feed refreshed.");
-    } catch (e: any) {
-      setMsg(e?.message || "Refresh failed");
-    } finally {
-      setLoading(false);
+      alert(e?.message || "Tier switch failed");
     }
   }
 
   return (
-    <div className="p-6 text-white">
-      <h1 className="text-3xl font-semibold mb-2">Subscription Plans</h1>
-      <p className="text-sm opacity-80 mb-6">
+    <div className="space-y-6">
+      <h1 className="text-3xl font-semibold">Subscription Plans</h1>
+      <p className="text-sm opacity-80">
         Signals-only trading tool. No auto-execution. Plans control access to signals, history, and analytics.
       </p>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <section className="border border-slate-700 rounded-xl p-4 bg-slate-900/40">
-          <h2 className="text-xl mb-3">Login / Register (Dev)</h2>
+      <div className="grid gap-6 md:grid-cols-3">
+        <section className="rounded-2xl border p-4 space-y-3">
+          <h2 className="text-xl font-semibold">Login / Register (Dev)</h2>
           <input
-            className="w-full mb-2 px-3 py-2 rounded bg-slate-950 border border-slate-700"
+            className="w-full rounded border bg-transparent px-3 py-2"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
           <input
-            type="password"
-            className="w-full mb-3 px-3 py-2 rounded bg-slate-950 border border-slate-700"
+            className="w-full rounded border bg-transparent px-3 py-2"
             placeholder="Password"
+            type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <div className="flex gap-2 mb-3">
-            <button className="px-3 py-2 rounded border border-slate-600" onClick={onRegister} disabled={loading}>
-              Register
-            </button>
-            <button className="px-3 py-2 rounded border border-slate-600" onClick={onLogin} disabled={loading}>
-              Login
-            </button>
-            <button className="px-3 py-2 rounded border border-slate-600" onClick={onLogout} disabled={loading}>
-              Logout
-            </button>
+          <div className="flex gap-2">
+            <button className="rounded border px-4 py-2" onClick={onRegister}>Register</button>
+            <button className="rounded border px-4 py-2" onClick={onLogin}>Login</button>
+            <button className="rounded border px-4 py-2" onClick={onLogout}>Logout</button>
           </div>
-          <p className="text-xs opacity-70">Token stored in localStorage key: apter_token</p>
-          <p className="text-xs opacity-70 mt-2">API base: {API_BASE_URL}</p>
+          <p className="text-xs opacity-70">Token stored in localStorage key: {TOKEN_KEY}</p>
         </section>
 
-        <section className="border border-slate-700 rounded-xl p-4 bg-slate-900/40">
-          <h2 className="text-xl mb-3">Current Subscription</h2>
-          <pre className="text-sm whitespace-pre-wrap break-words">
-            {JSON.stringify(subscription, null, 2)}
-          </pre>
+        <section className="rounded-2xl border p-4 space-y-3">
+          <h2 className="text-xl font-semibold">Current Subscription</h2>
+          {meErr ? <p className="text-red-400">{meErr}</p> : <pre className="text-xs overflow-auto">{JSON.stringify(me, null, 2)}</pre>}
 
-          <h3 className="text-lg mt-4 mb-2">Dev Admin Key</h3>
+          <h3 className="font-semibold">Dev Admin Key</h3>
           <input
-            className="w-full mb-3 px-3 py-2 rounded bg-slate-950 border border-slate-700"
-            value={adminKey}
-            onChange={(e) => setAdminKey(e.target.value)}
+            className="w-full rounded border bg-transparent px-3 py-2"
+            value={devKey}
+            onChange={(e) => setDevKey(e.target.value)}
           />
-          <div className="flex gap-2 flex-wrap">
-            <button className="px-3 py-2 rounded border border-slate-600" onClick={() => onSetTier("free")} disabled={!authed || loading}>FREE</button>
-            <button className="px-3 py-2 rounded border border-slate-600" onClick={() => onSetTier("analyst")} disabled={!authed || loading}>ANALYST</button>
-            <button className="px-3 py-2 rounded border border-slate-600" onClick={() => onSetTier("pro")} disabled={!authed || loading}>PRO</button>
+          <p className="text-xs opacity-70">Used only to switch tiers locally via /api/subscription/dev/set-tier.</p>
+
+          <div className="flex flex-wrap gap-2">
+            <button className="rounded border px-3 py-1" onClick={() => onSwitchTier("observer")} disabled={!isLoggedIn}>Set Observer</button>
+            <button className="rounded border px-3 py-1" onClick={() => onSwitchTier("analyst")} disabled={!isLoggedIn}>Set Analyst</button>
+            <button className="rounded border px-3 py-1" onClick={() => onSwitchTier("pro")} disabled={!isLoggedIn}>Set Pro</button>
           </div>
         </section>
 
-        <section className="border border-slate-700 rounded-xl p-4 bg-slate-900/40">
-          <h2 className="text-xl mb-3">Signals Preview</h2>
-          <button className="px-3 py-2 rounded border border-slate-600 mb-3" onClick={onRefreshFeed} disabled={loading}>
+        <section className="rounded-2xl border p-4 space-y-3">
+          <h2 className="text-xl font-semibold">Signals Preview</h2>
+          <button className="rounded border px-4 py-2" onClick={() => token && loadFeed(token)} disabled={!isLoggedIn}>
             Refresh feed
           </button>
-          <pre className="text-sm whitespace-pre-wrap break-words">
-            {JSON.stringify(signals, null, 2)}
-          </pre>
+          {feedErr ? <p className="text-red-400">{feedErr}</p> : <pre className="text-xs overflow-auto">{JSON.stringify(feed, null, 2)}</pre>}
         </section>
       </div>
 
-      <section className="border border-slate-700 rounded-xl p-4 bg-slate-900/40 mt-4">
-        <h2 className="text-xl mb-3">Plan Definitions</h2>
-        <pre className="text-sm whitespace-pre-wrap break-words">
-          {JSON.stringify(plans, null, 2)}
-        </pre>
+      <section className="rounded-2xl border p-4">
+        <h2 className="text-xl font-semibold mb-3">Available Plans</h2>
+        {plansErr ? (
+          <p className="text-red-400">{plansErr}</p>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-3">
+            {plans.map((p, idx) => (
+              <div key={`${p.code || p.name}-${idx}`} className="rounded-xl border p-3">
+                <h3 className="text-lg font-semibold">{p.name}</h3>
+                <p className="text-sm opacity-80">{p.description || "No description provided."}</p>
+                <ul className="mt-2 text-sm space-y-1 opacity-90">
+                  <li>Code: {p.code || "n/a"}</li>
+                  <li>Price: {typeof p.price_monthly === "number" ? `$${p.price_monthly}/mo` : "n/a"}</li>
+                  <li>Realtime: {String(!!p.realtime)}</li>
+                  <li>History days: {p.history_days ?? "n/a"}</li>
+                  <li>Analytics: {p.analytics_level ?? "n/a"}</li>
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
-      {msg ? <p className="mt-4 text-sm text-rose-300">{msg}</p> : null}
+      <p className="text-xs opacity-70">
+        Note: "Alerts" and "payments" are not implemented in Step 1; this page verifies plan definitions and server-side gating.
+      </p>
     </div>
   );
 }

@@ -1,140 +1,95 @@
 // Platform/web/src/lib/api.ts
+export const API_BASE =
+  (process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
 
-export type Json = Record<string, unknown> | unknown[] | string | number | boolean | null;
+type Json = Record<string, unknown> | Array<unknown> | string | number | boolean | null;
 
-function stripTrailingSlash(url: string): string {
-  return url.replace(/\/+$/, "");
-}
-
-function getBaseUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
-  if (!raw) {
-    // Browser fallback so app still works locally
-    if (typeof window !== "undefined") return window.location.origin;
-    return "http://127.0.0.1:8000";
-  }
-  return stripTrailingSlash(raw);
-}
-
-export const API_BASE_URL = getBaseUrl();
-
-function withQuery(path: string, query?: Record<string, string | number | boolean | undefined>) {
-  if (!query) return path;
-  const usp = new URLSearchParams();
-  for (const [k, v] of Object.entries(query)) {
-    if (v !== undefined) usp.set(k, String(v));
-  }
-  const qs = usp.toString();
-  return qs ? `${path}?${qs}` : path;
-}
-
-async function fetchJson(
+async function request<T = Json>(
   path: string,
-  init?: RequestInit,
-  opts?: { token?: string; adminKey?: string; allow404?: boolean }
-): Promise<Json> {
+  init?: RequestInit & { token?: string | null }
+): Promise<T> {
+  const url = `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+
   const headers = new Headers(init?.headers || {});
-  headers.set("Accept", "application/json");
   headers.set("Content-Type", "application/json");
 
-  if (opts?.token) headers.set("Authorization", `Bearer ${opts.token}`);
-  if (opts?.adminKey) headers.set("X-Admin-Key", opts.adminKey);
+  if (init?.token) {
+    headers.set("Authorization", `Bearer ${init.token}`);
+  }
 
-  const url = `${API_BASE_URL}${path}`;
   const res = await fetch(url, {
     ...init,
     headers,
     cache: "no-store",
   });
 
+  const text = await res.text();
+  const data = text ? safeJsonParse(text) : null;
+
   if (!res.ok) {
-    if (opts?.allow404 && res.status === 404) {
-      return { detail: "Not Found", _status: 404 };
-    }
-
-    let message = `HTTP ${res.status}`;
-    try {
-      const body = await res.json();
-      const detail =
-        (body as any)?.detail ||
-        (body as any)?.message ||
-        JSON.stringify(body);
-      message = `${message}: ${detail}`;
-    } catch {
-      try {
-        const txt = await res.text();
-        if (txt) message = `${message}: ${txt}`;
-      } catch {}
-    }
-    throw new Error(message);
+    const detail =
+      (isObject(data) && typeof data.detail === "string" && data.detail) ||
+      `HTTP ${res.status}`;
+    throw new Error(detail);
   }
 
+  return data as T;
+}
+
+function safeJsonParse(text: string): Json {
   try {
-    return await res.json();
+    return JSON.parse(text);
   } catch {
-    return null;
+    return text;
   }
 }
 
-// -------- Public helpers --------
-
-export async function getHealth() {
-  return fetchJson("/api/health");
+function isObject(v: unknown): v is Record<string, any> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-export async function getDashboard() {
-  return fetchJson("/api/dashboard");
-}
-
-/**
- * Plans endpoint can vary by build/version.
- * Try modern first, then fallback.
- */
-export async function getPlans() {
-  // Primary: shown in your Swagger
-  const a = (await fetchJson("/api/plans", undefined, { allow404: true })) as any;
-  if (!(a && a._status === 404)) return a;
-
-  // Fallback for older wiring
-  return fetchJson("/api/subscription/plans");
-}
-
-export async function register(email: string, password: string) {
-  return fetchJson("/auth/register", {
+/** Auth */
+export function register(email: string, password: string) {
+  return request("/auth/register", {
     method: "POST",
-    body: JSON.stringify({ email, password, planTier: "free" }),
+    body: JSON.stringify({ email, password }),
   });
 }
 
-export async function login(email: string, password: string) {
-  return fetchJson("/auth/login", {
+export function login(email: string, password: string) {
+  return request<{ access_token: string; token_type: string }>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email, password, trust_device: false }),
+    body: JSON.stringify({ username: email, password }),
   });
 }
 
-export async function getMySubscription(token: string) {
-  return fetchJson("/api/subscription/me", undefined, { token });
+/** Dashboard */
+export function getDashboard(period: "today" | "week" | "month" = "today") {
+  return request(`/api/dashboard?period=${encodeURIComponent(period)}`);
 }
 
-export async function getSignalsFeed(limit = 5, token?: string) {
-  // New path in your Swagger
-  const p1 = withQuery("/v1/signals/feed", { limit });
-  const a = (await fetchJson(p1, undefined, { token, allow404: true })) as any;
-  if (!(a && a._status === 404)) return a;
-
-  // Legacy fallback
-  const p2 = withQuery("/api/signals/feed", { limit });
-  return fetchJson(p2, undefined, { token });
+/** Subscriptions */
+export function getPlans() {
+  // IMPORTANT: Swagger shows /api/plans as public route
+  return request("/api/plans");
 }
 
-export async function devSetTier(
-  token: string,
-  tier: "free" | "analyst" | "pro",
-  adminKey: string
-) {
-  return fetchJson("/api/subscription/dev/set-tier", {
+export function getMySubscription(token: string) {
+  return request("/api/subscription/me", { token });
+}
+
+export function devSetTier(tier: string, devKey: string, token: string) {
+  return request("/api/subscription/dev/set-tier", {
     method: "POST",
+    token,
+    headers: {
+      "X-Admin-Key": devKey,
+    },
     body: JSON.stringify({ tier }),
-  }, { token, adminKey });
+  });
+}
+
+/** Signals */
+export function getSignalsFeed(limit = 25, token?: string | null) {
+  return request(`/v1/signals/feed?limit=${limit}`, { token: token || null });
 }
