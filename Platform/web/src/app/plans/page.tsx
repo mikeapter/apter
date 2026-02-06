@@ -1,196 +1,221 @@
+// Platform/web/src/app/plans/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiGet, apiPost } from "@/lib/api";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  API_BASE_URL,
+  devSetTier,
+  getMySubscription,
+  getPlans,
+  getSignalsFeed,
+  login,
+  register,
+} from "@/lib/api";
 
-type PlansResp = any;
-type MeResp = any;
-type FeedResp = any;
-
-async function tryGetPlans(): Promise<PlansResp> {
-  // Try both route styles in case backend differs by version
-  try {
-    return await apiGet("/api/subscription/plans", false);
-  } catch {
-    return await apiGet("/api/subscriptions/plans", false);
-  }
-}
-
-async function tryGetMe(): Promise<MeResp> {
-  try {
-    return await apiGet("/api/subscription/me", true);
-  } catch {
-    return await apiGet("/api/subscriptions/me", true);
-  }
-}
-
-async function tryGetFeed(): Promise<FeedResp> {
-  try {
-    return await apiGet("/v1/signals/feed?limit=5", true);
-  } catch {
-    try {
-      return await apiGet("/api/signals/feed?limit=5", true);
-    } catch {
-      return await apiGet("/v1/signals?limit=5", true);
-    }
-  }
-}
+type AnyObj = Record<string, any>;
 
 export default function PlansPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [devKey, setDevKey] = useState("dev");
+  const [adminKey, setAdminKey] = useState("dev");
 
-  const [plans, setPlans] = useState<any>(null);
-  const [me, setMe] = useState<any>(null);
-  const [feed, setFeed] = useState<any>(null);
+  const [token, setToken] = useState<string>("");
+  const [plans, setPlans] = useState<AnyObj | null>(null);
+  const [subscription, setSubscription] = useState<AnyObj | null>(null);
+  const [signals, setSignals] = useState<AnyObj | null>(null);
 
-  const [errPlans, setErrPlans] = useState("");
-  const [errMe, setErrMe] = useState("");
-  const [errFeed, setErrFeed] = useState("");
-  const [authMsg, setAuthMsg] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string>("");
 
-  async function refreshAll() {
-    setErrPlans("");
-    setErrMe("");
-    setErrFeed("");
+  useEffect(() => {
+    const t = localStorage.getItem("apter_token") || "";
+    setToken(t);
+  }, []);
 
+  const authed = useMemo(() => !!token, [token]);
+
+  async function loadPlansAndSignals(currentToken?: string) {
+    setMsg("");
     try {
-      const p = await tryGetPlans();
-      setPlans(p);
+      const p = await getPlans();
+      setPlans(p as AnyObj);
     } catch (e: any) {
-      setErrPlans(e.message || "Failed to fetch plans");
-      setPlans(null);
+      setPlans({ error: e?.message || "Failed to load plans" });
     }
 
     try {
-      const m = await tryGetMe();
-      setMe(m);
+      const s = await getSignalsFeed(5, currentToken || token || undefined);
+      setSignals(s as AnyObj);
     } catch (e: any) {
-      setErrMe(e.message || "Not authenticated");
-      setMe(null);
+      setSignals({ error: e?.message || "Failed to load signals" });
     }
+  }
 
+  async function loadSubscription(currentToken?: string) {
+    const t = currentToken || token;
+    if (!t) {
+      setSubscription({ detail: "Not authenticated" });
+      return;
+    }
     try {
-      const f = await tryGetFeed();
-      setFeed(f);
+      const sub = await getMySubscription(t);
+      setSubscription(sub as AnyObj);
     } catch (e: any) {
-      setErrFeed(e.message || "Failed to fetch feed");
-      setFeed(null);
+      setSubscription({ error: e?.message || "Failed to load subscription" });
     }
   }
 
   useEffect(() => {
-    refreshAll();
-  }, []);
+    loadPlansAndSignals(token || undefined);
+    loadSubscription(token || undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   async function onRegister() {
-    setAuthMsg("");
+    setLoading(true);
+    setMsg("");
     try {
-      const r = await apiPost("/auth/register", { email, password }, false);
-      const token = r?.access_token || r?.token;
-      if (token) localStorage.setItem("apter_token", token);
-      setAuthMsg("Registered successfully.");
-      await refreshAll();
+      await register(email, password);
+      setMsg("Registered successfully. Now click Login.");
     } catch (e: any) {
-      setAuthMsg(`Register failed: ${e.message}`);
+      setMsg(e?.message || "Register failed");
+    } finally {
+      setLoading(false);
     }
   }
 
   async function onLogin() {
-    setAuthMsg("");
+    setLoading(true);
+    setMsg("");
     try {
-      const r = await apiPost("/auth/login", { email, password }, false);
-      const token = r?.access_token || r?.token;
-      if (!token) throw new Error("No token returned");
-      localStorage.setItem("apter_token", token);
-      setAuthMsg("Login successful.");
-      await refreshAll();
+      const res = (await login(email, password)) as AnyObj;
+      const t = res?.access_token || res?.token;
+      if (!t) throw new Error("No access token returned");
+      localStorage.setItem("apter_token", t);
+      setToken(t);
+      setMsg("Login successful.");
     } catch (e: any) {
-      setAuthMsg(`Login failed: ${e.message}`);
+      setMsg(e?.message || "Login failed");
+    } finally {
+      setLoading(false);
     }
   }
 
   function onLogout() {
     localStorage.removeItem("apter_token");
-    setAuthMsg("Logged out.");
-    refreshAll();
+    setToken("");
+    setSubscription({ detail: "Not authenticated" });
+    setMsg("Logged out.");
   }
 
-  async function onSetTier(tier: string) {
-    setAuthMsg("");
+  async function onSetTier(tier: "free" | "analyst" | "pro") {
+    if (!token) {
+      setMsg("Login first.");
+      return;
+    }
+    setLoading(true);
+    setMsg("");
     try {
-      // Local/dev endpoint
-      await apiPost(
-        "/api/subscription/dev/set-tier",
-        { tier },
-        true,
-        { "X-Admin-Key": devKey }
-      );
-      setAuthMsg(`Tier updated to ${tier}`);
-      await refreshAll();
+      await devSetTier(token, tier, adminKey);
+      await loadSubscription(token);
+      setMsg(`Tier switched to ${tier.toUpperCase()}.`);
     } catch (e: any) {
-      setAuthMsg(`Set tier failed: ${e.message}`);
+      setMsg(e?.message || "Tier switch failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onRefreshFeed() {
+    setLoading(true);
+    setMsg("");
+    try {
+      const s = await getSignalsFeed(5, token || undefined);
+      setSignals(s as AnyObj);
+      setMsg("Feed refreshed.");
+    } catch (e: any) {
+      setMsg(e?.message || "Refresh failed");
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <main className="p-6 space-y-6">
-      <h1 className="text-3xl font-semibold">Subscription Plans</h1>
-      <p>Signals-only trading tool. No auto-execution.</p>
+    <div className="p-6 text-white">
+      <h1 className="text-3xl font-semibold mb-2">Subscription Plans</h1>
+      <p className="text-sm opacity-80 mb-6">
+        Signals-only trading tool. No auto-execution. Plans control access to signals, history, and analytics.
+      </p>
 
-      <section className="grid gap-6 md:grid-cols-3">
-        <div className="space-y-3 border rounded-xl p-4">
-          <h2 className="font-semibold">Login / Register (Dev)</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <section className="border border-slate-700 rounded-xl p-4 bg-slate-900/40">
+          <h2 className="text-xl mb-3">Login / Register (Dev)</h2>
           <input
-            className="w-full border rounded p-2"
+            className="w-full mb-2 px-3 py-2 rounded bg-slate-950 border border-slate-700"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
           <input
-            className="w-full border rounded p-2"
-            placeholder="Password"
             type="password"
+            className="w-full mb-3 px-3 py-2 rounded bg-slate-950 border border-slate-700"
+            placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <div className="flex gap-2">
-            <button className="border rounded px-3 py-2" onClick={onRegister}>Register</button>
-            <button className="border rounded px-3 py-2" onClick={onLogin}>Login</button>
-            <button className="border rounded px-3 py-2" onClick={onLogout}>Logout</button>
+          <div className="flex gap-2 mb-3">
+            <button className="px-3 py-2 rounded border border-slate-600" onClick={onRegister} disabled={loading}>
+              Register
+            </button>
+            <button className="px-3 py-2 rounded border border-slate-600" onClick={onLogin} disabled={loading}>
+              Login
+            </button>
+            <button className="px-3 py-2 rounded border border-slate-600" onClick={onLogout} disabled={loading}>
+              Logout
+            </button>
           </div>
-          {authMsg && <p className="text-sm">{authMsg}</p>}
-        </div>
+          <p className="text-xs opacity-70">Token stored in localStorage key: apter_token</p>
+          <p className="text-xs opacity-70 mt-2">API base: {API_BASE_URL}</p>
+        </section>
 
-        <div className="space-y-3 border rounded-xl p-4">
-          <h2 className="font-semibold">Current Subscription</h2>
-          {errMe ? <p className="text-red-500">{errMe}</p> : <pre className="text-xs overflow-auto">{JSON.stringify(me, null, 2)}</pre>}
+        <section className="border border-slate-700 rounded-xl p-4 bg-slate-900/40">
+          <h2 className="text-xl mb-3">Current Subscription</h2>
+          <pre className="text-sm whitespace-pre-wrap break-words">
+            {JSON.stringify(subscription, null, 2)}
+          </pre>
 
-          <h3 className="font-semibold">Dev Admin Key</h3>
+          <h3 className="text-lg mt-4 mb-2">Dev Admin Key</h3>
           <input
-            className="w-full border rounded p-2"
-            value={devKey}
-            onChange={(e) => setDevKey(e.target.value)}
+            className="w-full mb-3 px-3 py-2 rounded bg-slate-950 border border-slate-700"
+            value={adminKey}
+            onChange={(e) => setAdminKey(e.target.value)}
           />
           <div className="flex gap-2 flex-wrap">
-            <button className="border rounded px-3 py-2" onClick={() => onSetTier("observer")}>Set Observer</button>
-            <button className="border rounded px-3 py-2" onClick={() => onSetTier("analyst")}>Set Analyst</button>
-            <button className="border rounded px-3 py-2" onClick={() => onSetTier("pro")}>Set Pro</button>
+            <button className="px-3 py-2 rounded border border-slate-600" onClick={() => onSetTier("free")} disabled={!authed || loading}>FREE</button>
+            <button className="px-3 py-2 rounded border border-slate-600" onClick={() => onSetTier("analyst")} disabled={!authed || loading}>ANALYST</button>
+            <button className="px-3 py-2 rounded border border-slate-600" onClick={() => onSetTier("pro")} disabled={!authed || loading}>PRO</button>
           </div>
-        </div>
+        </section>
 
-        <div className="space-y-3 border rounded-xl p-4">
-          <h2 className="font-semibold">Signals Preview</h2>
-          <button className="border rounded px-3 py-2" onClick={refreshAll}>Refresh feed</button>
-          {errFeed ? <p className="text-red-500">{errFeed}</p> : <pre className="text-xs overflow-auto">{JSON.stringify(feed, null, 2)}</pre>}
-        </div>
+        <section className="border border-slate-700 rounded-xl p-4 bg-slate-900/40">
+          <h2 className="text-xl mb-3">Signals Preview</h2>
+          <button className="px-3 py-2 rounded border border-slate-600 mb-3" onClick={onRefreshFeed} disabled={loading}>
+            Refresh feed
+          </button>
+          <pre className="text-sm whitespace-pre-wrap break-words">
+            {JSON.stringify(signals, null, 2)}
+          </pre>
+        </section>
+      </div>
+
+      <section className="border border-slate-700 rounded-xl p-4 bg-slate-900/40 mt-4">
+        <h2 className="text-xl mb-3">Plan Definitions</h2>
+        <pre className="text-sm whitespace-pre-wrap break-words">
+          {JSON.stringify(plans, null, 2)}
+        </pre>
       </section>
 
-      <section className="border rounded-xl p-4">
-        <h2 className="font-semibold mb-2">Available Plans</h2>
-        {errPlans ? <p className="text-red-500">{errPlans}</p> : <pre className="text-xs overflow-auto">{JSON.stringify(plans, null, 2)}</pre>}
-      </section>
-    </main>
+      {msg ? <p className="mt-4 text-sm text-rose-300">{msg}</p> : null}
+    </div>
   );
 }
