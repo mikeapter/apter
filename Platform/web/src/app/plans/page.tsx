@@ -35,9 +35,7 @@ type Signal = {
   confidence?: string;
 };
 
-type SignalsResponse =
-  | { items?: Signal[] }
-  | { signals?: Signal[] };
+type SignalsResponse = { items?: Signal[] } | { signals?: Signal[] };
 
 const PLAN_ENDPOINTS = ["/api/plans", "/api/subscription/plans"];
 const ME_ENDPOINTS = ["/api/subscription/me"];
@@ -83,7 +81,6 @@ export default function PlansPage() {
         : [];
       setPlans(extractedPlans);
 
-      // me endpoint can fail if unauthenticated; handle gracefully
       try {
         const me = await firstSuccess<MeResponse>(ME_ENDPOINTS);
         setCurrentTier(me?.tier || me?.name || "Observer");
@@ -136,10 +133,9 @@ export default function PlansPage() {
   async function register() {
     setError("");
     try {
-      const body = { email, password };
-      await fetchJson("/auth/register", {
+      await fetchJson("/api/auth/register", {
         method: "POST",
-        body: JSON.stringify(body),
+        body: JSON.stringify({ email, password }),
       });
       await login();
     } catch (err: any) {
@@ -150,12 +146,12 @@ export default function PlansPage() {
   async function login() {
     setError("");
     try {
+      const base = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
+      const url = `${base}/api/auth/login`;
+
       const body = new URLSearchParams();
       body.set("username", email);
       body.set("password", password);
-
-      const base = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
-      const url = `${base}/auth/login`;
 
       const res = await fetch(url, {
         method: "POST",
@@ -171,8 +167,8 @@ export default function PlansPage() {
       const json = await res.json();
       const token = json?.access_token;
       if (!token) throw new Error("No access token returned");
-      localStorage.setItem(tokenKey, token);
 
+      localStorage.setItem(tokenKey, token);
       await loadAll();
     } catch (err: any) {
       setError(err?.message || "Login failed");
@@ -266,13 +262,9 @@ export default function PlansPage() {
         </div>
       </div>
 
-      <div className="mt-6">
-        {error ? <div className="text-red-400">{error}</div> : null}
-      </div>
+      <div className="mt-6">{error ? <div className="text-red-400">{error}</div> : null}</div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {planCards}
-      </div>
+      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">{planCards}</div>
 
       <p className="mt-6 text-sm text-slate-400">
         Note: "Alerts" and "payments" are not implemented in Step 1; this page verifies plan definitions and server-side gating.

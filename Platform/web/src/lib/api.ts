@@ -19,12 +19,21 @@ export async function fetchJson<T = unknown>(
 ): Promise<T> {
   const url = joinUrl(API_BASE, path);
 
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+    ...(init?.headers ?? {}),
+  };
+
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("apter_token") : null;
+
+  if (token) {
+    (headers as Record<string, string>).Authorization = `Bearer ${token}`;
+  }
+
   const res = await fetch(url, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    headers,
     cache: "no-store",
   });
 
