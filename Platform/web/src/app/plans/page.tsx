@@ -2,7 +2,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchJson } from "@/lib/api";
+import api from "@/lib/api";
+const { fetchJson } = api;
 
 type Plan = {
   tier: string;

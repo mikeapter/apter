@@ -44,3 +44,7 @@ export async function fetchJson<T = unknown>(
 
   return (await res.json()) as T;
 }
+
+// compatibility export
+const api = { fetchJson, normalizeBaseUrl };
+export default api;
