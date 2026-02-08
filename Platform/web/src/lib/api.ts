@@ -1,20 +1,53 @@
 // Platform/web/src/lib/api.ts
-export const API_BASE =
-  (process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
 
-type Json = Record<string, unknown> | Array<unknown> | string | number | boolean | null;
+export type Json = Record<string, unknown> | unknown[] | string | number | boolean | null;
 
-async function request<T = Json>(
+const RAW_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "").trim();
+
+// Normalize base once.
+// - remove trailing slashes
+// - remove accidental trailing /api (we add /api in buildApiUrl)
+const BASE = RAW_BASE.replace(/\/+$/, "").replace(/\/api$/i, "");
+
+function buildApiUrl(path: string): string {
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+
+  // If caller already passed /api/..., keep it
+  if (cleanPath.startsWith("/api/")) {
+    return `${BASE}${cleanPath}`;
+  }
+
+  // Otherwise prepend /api
+  return `${BASE}/api${cleanPath}`;
+}
+
+export class ApiError extends Error {
+  status: number;
+  bodyText: string;
+
+  constructor(message: string, status: number, bodyText: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.bodyText = bodyText;
+  }
+}
+
+export async function apiFetch<T = Json>(
   path: string,
-  init?: RequestInit & { token?: string | null }
+  init: RequestInit = {}
 ): Promise<T> {
-  const url = `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+  const url = buildApiUrl(path);
 
-  const headers = new Headers(init?.headers || {});
-  headers.set("Content-Type", "application/json");
+  const headers = new Headers(init.headers || {});
+  if (!headers.has("Content-Type") && init.body && !(init.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
 
-  if (init?.token) {
-    headers.set("Authorization", `Bearer ${init.token}`);
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("apter_token") : null;
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
   const res = await fetch(url, {
@@ -24,72 +57,26 @@ async function request<T = Json>(
   });
 
   const text = await res.text();
-  const data = text ? safeJsonParse(text) : null;
 
   if (!res.ok) {
-    const detail =
-      (isObject(data) && typeof data.detail === "string" && data.detail) ||
-      `HTTP ${res.status}`;
-    throw new Error(detail);
+    throw new ApiError(
+      `API ${res.status} ${res.statusText} at ${url}`,
+      res.status,
+      text
+    );
   }
 
-  return data as T;
-}
+  // Empty body handling
+  if (!text) return null as T;
 
-function safeJsonParse(text: string): Json {
   try {
-    return JSON.parse(text);
+    return JSON.parse(text) as T;
   } catch {
-    return text;
+    // non-JSON successful response fallback
+    return text as T;
   }
 }
 
-function isObject(v: unknown): v is Record<string, any> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
-/** Auth */
-export function register(email: string, password: string) {
-  return request("/auth/register", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
-}
-
-export function login(email: string, password: string) {
-  return request<{ access_token: string; token_type: string }>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ username: email, password }),
-  });
-}
-
-/** Dashboard */
-export function getDashboard(period: "today" | "week" | "month" = "today") {
-  return request(`/api/dashboard?period=${encodeURIComponent(period)}`);
-}
-
-/** Subscriptions */
-export function getPlans() {
-  // IMPORTANT: Swagger shows /api/plans as public route
-  return request("/api/plans");
-}
-
-export function getMySubscription(token: string) {
-  return request("/api/subscription/me", { token });
-}
-
-export function devSetTier(tier: string, devKey: string, token: string) {
-  return request("/api/subscription/dev/set-tier", {
-    method: "POST",
-    token,
-    headers: {
-      "X-Admin-Key": devKey,
-    },
-    body: JSON.stringify({ tier }),
-  });
-}
-
-/** Signals */
-export function getSignalsFeed(limit = 25, token?: string | null) {
-  return request(`/v1/signals/feed?limit=${limit}`, { token: token || null });
+export function getApiBaseForDebug() {
+  return { RAW_BASE, BASE };
 }
