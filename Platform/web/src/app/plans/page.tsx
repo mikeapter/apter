@@ -1,264 +1,282 @@
+// Platform/web/src/app/plans/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { apiFetch, ApiError, getApiBaseForDebug } from "@/lib/api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { fetchJson } from "@/lib/api";
 
 type Plan = {
   tier: string;
   name: string;
   price_usd_month: number;
-  target_user: string;
-  features: string[];
-  exclusions: string[];
-  limits: {
-    signal_delay_seconds: number;
-    max_signals_per_response: number;
-    history_days: number;
-    alerts: boolean;
+  target_user?: string;
+  features?: string[];
+  exclusions?: string[];
+  limits?: {
+    signal_delay_seconds?: number;
+    max_signals_per_response?: number;
+    history_days?: number;
+    alerts?: boolean;
   };
 };
 
-type PlansResponse = {
-  plans: Plan[];
-  as_of?: string;
-};
+type PlansResponse =
+  | { plans: Plan[]; as_of?: string }
+  | { data?: { plans?: Plan[] } };
 
 type MeResponse = {
   tier?: string;
-  email?: string;
+  name?: string;
 };
 
-type FeedItem = {
+type Signal = {
   ticker: string;
   signal: string;
   timestamp?: string;
   confidence?: string;
 };
 
-type FeedResponse = {
-  items?: FeedItem[];
-  signals?: FeedItem[];
-};
+type SignalsResponse =
+  | { items?: Signal[] }
+  | { signals?: Signal[] };
+
+const PLAN_ENDPOINTS = ["/api/plans", "/api/subscription/plans"];
+const ME_ENDPOINTS = ["/api/subscription/me"];
+const SIGNAL_ENDPOINTS = ["/api/signals/feed?limit=5", "/api/signals/feed"];
+
+async function firstSuccess<T>(endpoints: string[]): Promise<T> {
+  let lastErr: unknown = null;
+
+  for (const ep of endpoints) {
+    try {
+      return await fetchJson<T>(ep);
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+
+  throw lastErr ?? new Error("All endpoints failed");
+}
 
 export default function PlansPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [currentTier, setCurrentTier] = useState<string>("(not logged in)");
-  const [feed, setFeed] = useState<FeedItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [errorText, setErrorText] = useState<string>("");
+  const [currentTier, setCurrentTier] = useState<string>("Unknown");
+  const [signals, setSignals] = useState<Signal[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [devKey, setDevKey] = useState("dev");
 
-  const dbg = useMemo(() => getApiBaseForDebug(), []);
+  const tokenKey = "apter_token";
 
-  async function loadAll() {
+  const loadAll = useCallback(async () => {
     setLoading(true);
-    setErrorText("");
+    setError("");
 
     try {
-      // 1) plans endpoint (your backend has /api/plans)
-      const plansRes = await apiFetch<PlansResponse>("/plans");
-      setPlans(Array.isArray(plansRes?.plans) ? plansRes.plans : []);
+      const plansRes = await firstSuccess<PlansResponse>(PLAN_ENDPOINTS);
+      const extractedPlans = Array.isArray((plansRes as any)?.plans)
+        ? ((plansRes as any).plans as Plan[])
+        : Array.isArray((plansRes as any)?.data?.plans)
+        ? (((plansRes as any).data.plans as Plan[]) ?? [])
+        : [];
+      setPlans(extractedPlans);
 
-      // 2) current subscription (requires auth token)
+      // me endpoint can fail if unauthenticated; handle gracefully
       try {
-        const me = await apiFetch<MeResponse>("/subscription/me");
-        setCurrentTier(me?.tier || "(unknown)");
-      } catch (err) {
-        setCurrentTier("(not logged in)");
-      }
-
-      // 3) signals preview (may be gated by tier/login)
-      try {
-        const feedRes = await apiFetch<FeedResponse>("/signals/feed?limit=5");
-        const items = Array.isArray(feedRes?.items)
-          ? feedRes.items
-          : Array.isArray(feedRes?.signals)
-          ? feedRes.signals
-          : [];
-        setFeed(items);
+        const me = await firstSuccess<MeResponse>(ME_ENDPOINTS);
+        setCurrentTier(me?.tier || me?.name || "Observer");
       } catch {
-        setFeed([]);
+        setCurrentTier("Observer");
       }
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setErrorText(
-          [
-            `Failed to load plans.`,
-            `Status: ${err.status}`,
-            `Message: ${err.message}`,
-            `Body: ${err.bodyText || "(empty)"}`,
-            `API Base RAW: ${dbg.RAW_BASE || "(empty)"}`,
-            `API Base normalized: ${dbg.BASE || "(empty)"}`,
-          ].join("\n")
-        );
-      } else {
-        setErrorText(
-          `Unexpected error while loading plans.\nAPI Base RAW: ${dbg.RAW_BASE || "(empty)"}\nAPI Base normalized: ${dbg.BASE || "(empty)"}`
-        );
+
+      try {
+        const sigRes = await firstSuccess<SignalsResponse>(SIGNAL_ENDPOINTS);
+        const items = Array.isArray((sigRes as any)?.items)
+          ? ((sigRes as any).items as Signal[])
+          : Array.isArray((sigRes as any)?.signals)
+          ? ((sigRes as any).signals as Signal[])
+          : [];
+        setSignals(items);
+      } catch {
+        setSignals([]);
       }
+    } catch (err: any) {
+      setError(err?.message || "Failed to fetch");
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
+
+  const planCards = useMemo(() => {
+    if (!plans.length) return null;
+    return plans.map((p) => (
+      <div
+        key={p.tier}
+        className="rounded-md border border-slate-800 bg-[#0a1136] p-4"
+      >
+        <div className="text-sm text-slate-300">{p.tier?.toUpperCase()}</div>
+        <div className="text-xl font-semibold text-white">{p.name}</div>
+        <div className="mt-1 text-slate-200">
+          ${p.price_usd_month}
+          <span className="text-slate-400"> / month</span>
+        </div>
+        {p.target_user ? (
+          <div className="mt-2 text-sm text-slate-400">{p.target_user}</div>
+        ) : null}
+      </div>
+    ));
+  }, [plans]);
 
   async function register() {
-    setErrorText("");
+    setError("");
     try {
-      await apiFetch("/auth/register", {
+      const body = { email, password };
+      await fetchJson("/auth/register", {
         method: "POST",
-        body: JSON.stringify({ email, password, tier: "observer" }),
+        body: JSON.stringify(body),
       });
       await login();
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setErrorText(`Register failed (${err.status}): ${err.bodyText || err.message}`);
-      } else {
-        setErrorText("Register failed.");
-      }
+    } catch (err: any) {
+      setError(err?.message || "Register failed");
     }
   }
 
   async function login() {
-    setErrorText("");
+    setError("");
     try {
-      const res = await apiFetch<{ access_token?: string }>("/auth/login", {
+      const body = new URLSearchParams();
+      body.set("username", email);
+      body.set("password", password);
+
+      const base = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
+      const url = `${base}/auth/login`;
+
+      const res = await fetch(url, {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
       });
-      if (res?.access_token) {
-        localStorage.setItem("apter_token", res.access_token);
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`Login failed: ${res.status} ${txt}`);
       }
+
+      const json = await res.json();
+      const token = json?.access_token;
+      if (!token) throw new Error("No access token returned");
+      localStorage.setItem(tokenKey, token);
+
       await loadAll();
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setErrorText(`Login failed (${err.status}): ${err.bodyText || err.message}`);
-      } else {
-        setErrorText("Login failed.");
-      }
+    } catch (err: any) {
+      setError(err?.message || "Login failed");
     }
   }
 
   function logout() {
-    localStorage.removeItem("apter_token");
-    setCurrentTier("(not logged in)");
+    localStorage.removeItem(tokenKey);
+    setCurrentTier("Observer");
   }
 
-  async function setTier(tier: "observer" | "signals" | "pro") {
-    setErrorText("");
+  async function refreshSignals() {
+    setError("");
     try {
-      await apiFetch("/subscription/dev/set-tier", {
-        method: "POST",
-        headers: { "X-Admin-Key": devKey },
-        body: JSON.stringify({ tier }),
-      });
-      await loadAll();
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setErrorText(`Set tier failed (${err.status}): ${err.bodyText || err.message}`);
-      } else {
-        setErrorText("Set tier failed.");
-      }
+      const sigRes = await firstSuccess<SignalsResponse>(SIGNAL_ENDPOINTS);
+      const items = Array.isArray((sigRes as any)?.items)
+        ? ((sigRes as any).items as Signal[])
+        : Array.isArray((sigRes as any)?.signals)
+        ? ((sigRes as any).signals as Signal[])
+        : [];
+      setSignals(items);
+    } catch (err: any) {
+      setError(err?.message || "Failed to fetch");
     }
   }
 
-  useEffect(() => {
-    loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   return (
-    <main className="p-6 space-y-6">
-      <h1 className="text-3xl font-semibold">Subscription Plans</h1>
-      <p className="opacity-80">
+    <div className="p-6 text-white">
+      <h1 className="text-4xl font-bold">Subscription Plans</h1>
+      <p className="mt-3 text-slate-300">
         Signals-only trading tool. No auto-execution. Plans control access to signals, history, and analytics.
       </p>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <section className="rounded-xl border p-4 space-y-3">
-          <h2 className="font-semibold">Login / Register (Dev)</h2>
+      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="rounded-md border border-slate-800 bg-[#0a1136] p-4">
+          <h2 className="text-2xl font-semibold">Login / Register (Dev)</h2>
           <input
-            className="w-full rounded border px-3 py-2 bg-transparent"
+            className="mt-4 w-full rounded border border-slate-700 bg-[#070d2b] p-2"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
           <input
-            className="w-full rounded border px-3 py-2 bg-transparent"
+            className="mt-2 w-full rounded border border-slate-700 bg-[#070d2b] p-2"
             placeholder="Password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <div className="flex gap-2">
-            <button className="rounded border px-3 py-2" onClick={register}>Register</button>
-            <button className="rounded border px-3 py-2" onClick={login}>Login</button>
-            <button className="rounded border px-3 py-2" onClick={logout}>Logout</button>
+          <div className="mt-3 flex gap-2">
+            <button className="rounded bg-slate-800 px-4 py-2" onClick={register}>Register</button>
+            <button className="rounded bg-slate-800 px-4 py-2" onClick={login}>Login</button>
+            <button className="rounded bg-slate-800 px-4 py-2" onClick={logout}>Logout</button>
           </div>
-          <p className="text-sm opacity-70">Token stored in localStorage key: apter_token</p>
-        </section>
+          <div className="mt-3 text-sm text-slate-400">Token stored in localStorage key: {tokenKey}</div>
+        </div>
 
-        <section className="rounded-xl border p-4 space-y-3">
-          <h2 className="font-semibold">Current Subscription</h2>
-          <p>{loading ? "Loading..." : currentTier}</p>
-
-          <h3 className="font-semibold pt-2">Dev Admin Key</h3>
-          <input
-            className="w-full rounded border px-3 py-2 bg-transparent"
-            value={devKey}
-            onChange={(e) => setDevKey(e.target.value)}
-          />
-          <div className="flex flex-wrap gap-2">
-            <button className="rounded border px-3 py-2" onClick={() => setTier("observer")}>Set Observer</button>
-            <button className="rounded border px-3 py-2" onClick={() => setTier("signals")}>Set Signals</button>
-            <button className="rounded border px-3 py-2" onClick={() => setTier("pro")}>Set Pro</button>
+        <div className="rounded-md border border-slate-800 bg-[#0a1136] p-4">
+          <h2 className="text-2xl font-semibold">Current Subscription</h2>
+          <div className="mt-3 text-lg">{loading ? "Loading..." : currentTier}</div>
+          <div className="mt-4">
+            <label className="text-sm text-slate-300">Dev Admin Key</label>
+            <input
+              className="mt-1 w-full rounded border border-slate-700 bg-[#070d2b] p-2"
+              value={devKey}
+              onChange={(e) => setDevKey(e.target.value)}
+            />
+            <div className="mt-2 text-sm text-slate-400">
+              Used only to switch tiers locally via <code>/api/subscription/dev/set-tier</code>.
+            </div>
           </div>
-        </section>
+        </div>
 
-        <section className="rounded-xl border p-4 space-y-3">
-          <h2 className="font-semibold">Signals Preview</h2>
-          <button className="rounded border px-3 py-2" onClick={loadAll}>Refresh feed</button>
-          <div className="text-sm space-y-1">
-            {feed.length === 0 ? (
-              <p className="opacity-70">No signals loaded (may be tier-gated or not logged in).</p>
+        <div className="rounded-md border border-slate-800 bg-[#0a1136] p-4">
+          <h2 className="text-2xl font-semibold">Signals Preview</h2>
+          <button className="mt-3 rounded bg-slate-800 px-4 py-2" onClick={refreshSignals}>
+            Refresh feed
+          </button>
+          <div className="mt-4 space-y-2">
+            {signals.length === 0 ? (
+              <div className="text-slate-400">No signals yet.</div>
             ) : (
-              feed.map((s, i) => (
-                <div key={`${s.ticker}-${i}`} className="rounded border px-2 py-1">
-                  <strong>{s.ticker}</strong> — {s.signal}
+              signals.map((s, idx) => (
+                <div key={`${s.ticker}-${idx}`} className="rounded border border-slate-800 p-2 text-sm">
+                  <span className="font-semibold">{s.ticker}</span> — {s.signal}
                   {s.confidence ? ` (${s.confidence})` : ""}
                 </div>
               ))
             )}
           </div>
-        </section>
+        </div>
       </div>
 
-      <section className="rounded-xl border p-4">
-        <h2 className="font-semibold mb-3">Plan Definitions</h2>
-        {loading ? (
-          <p>Loading plans…</p>
-        ) : plans.length === 0 ? (
-          <p className="opacity-70">No plans returned.</p>
-        ) : (
-          <div className="space-y-3">
-            {plans.map((p) => (
-              <div key={p.tier} className="rounded border p-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">{p.name}</h3>
-                  <span>${p.price_usd_month}/mo</span>
-                </div>
-                <p className="text-sm opacity-80">Tier: {p.tier} • Target: {p.target_user}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+      <div className="mt-6">
+        {error ? <div className="text-red-400">{error}</div> : null}
+      </div>
 
-      {errorText ? (
-        <pre className="whitespace-pre-wrap rounded-xl border p-4 text-red-400">{errorText}</pre>
-      ) : null}
-    </main>
+      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {planCards}
+      </div>
+
+      <p className="mt-6 text-sm text-slate-400">
+        Note: "Alerts" and "payments" are not implemented in Step 1; this page verifies plan definitions and server-side gating.
+      </p>
+    </div>
   );
 }
