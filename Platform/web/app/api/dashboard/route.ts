@@ -7,7 +7,7 @@ export async function GET(req: Request) {
   const tier = resolveTierFromRequest(req);
 
   return NextResponse.json({
-    mode: "signals_only",
+    mode: "analysis_only",
     tier,
     market_regime: "NEUTRAL",
     timestamp: nowIso(),
@@ -19,11 +19,11 @@ export async function GET(req: Request) {
       "Risk posture should prioritize capital preservation under current conditions.",
     ],
     signal_matrix: [
-      { ticker: "AAPL", signal: "HOLD", ts: nowIso(), confidence: "Medium" },
-      { ticker: "MSFT", signal: "HOLD", ts: nowIso(), confidence: "High" },
-      { ticker: "NVDA", signal: "SELL", ts: nowIso(), confidence: "Low" },
-      { ticker: "SPY", signal: "HOLD", ts: nowIso(), confidence: "Medium" },
-      { ticker: "TLT", signal: "BUY", ts: nowIso(), confidence: "Low" },
+      { ticker: "AAPL", signal: "NEUTRAL_BIAS", ts: nowIso(), confidence: "Medium" },
+      { ticker: "MSFT", signal: "NEUTRAL_BIAS", ts: nowIso(), confidence: "High" },
+      { ticker: "NVDA", signal: "BEARISH_BIAS", ts: nowIso(), confidence: "Low" },
+      { ticker: "SPY", signal: "NEUTRAL_BIAS", ts: nowIso(), confidence: "Medium" },
+      { ticker: "TLT", signal: "BULLISH_BIAS", ts: nowIso(), confidence: "Low" },
     ],
     diagnostics: [
       {
@@ -82,5 +82,8 @@ export async function GET(req: Request) {
       footer_note: "Process integrity is prioritized over promotional performance presentation.",
     },
     footer_guidance: "No action is often the correct action.",
+    disclosure: {
+      text: "Information is for educational and research purposes only. Not investment advice. Apter Financial is not acting as a registered investment adviser.",
+    },
   });
 }
