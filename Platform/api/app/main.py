@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes import auth, twofa, bots, logs, system, dashboard, signals, insights
 from app.routes import subscriptions
+from app.routes import stripe as stripe_routes
 from app.db.init_db import init_db
 
 
@@ -35,7 +36,7 @@ def _parse_cors_origins() -> List[str]:
 
 
 app = FastAPI(
-    title="BotTrader Control Plane",
+    title="Apter Financial API",
     version="0.1.0",
     openapi_version="3.1.0",
 )
@@ -66,3 +67,4 @@ app.include_router(dashboard.router)
 app.include_router(signals.router)
 app.include_router(insights.router)
 app.include_router(subscriptions.router)
+app.include_router(stripe_routes.router)

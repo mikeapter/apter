@@ -1,5 +1,5 @@
 export type MarketRegime = "RISK-ON" | "NEUTRAL" | "RISK-OFF";
-export type SignalType = "BUY" | "SELL" | "HOLD";
+export type SignalType = "BULLISH_BIAS" | "NEUTRAL_BIAS" | "BEARISH_BIAS";
 export type ConfidenceLevel = "Low" | "Medium" | "High";
 export type UserTier = "FREE" | "STANDARD" | "PRO";
 
@@ -64,11 +64,11 @@ export const sampleDashboardData: DashboardData = {
     "Risk posture should prioritize capital preservation under current conditions.",
   ],
   signals: [
-    { ticker: "AAPL", signal: "HOLD", timestamp: "2026-02-02 13:12:08", confidence: "Medium" },
-    { ticker: "MSFT", signal: "HOLD", timestamp: "2026-02-02 13:11:42", confidence: "High" },
-    { ticker: "NVDA", signal: "SELL", timestamp: "2026-02-02 13:10:19", confidence: "Low" },
-    { ticker: "SPY",  signal: "HOLD", timestamp: "2026-02-02 13:09:05", confidence: "Medium" },
-    { ticker: "TLT",  signal: "BUY",  timestamp: "2026-02-02 13:07:33", confidence: "Low" },
+    { ticker: "AAPL", signal: "NEUTRAL_BIAS", timestamp: "2026-02-02 13:12:08", confidence: "Medium" },
+    { ticker: "MSFT", signal: "NEUTRAL_BIAS", timestamp: "2026-02-02 13:11:42", confidence: "High" },
+    { ticker: "NVDA", signal: "BEARISH_BIAS", timestamp: "2026-02-02 13:10:19", confidence: "Low" },
+    { ticker: "SPY",  signal: "NEUTRAL_BIAS", timestamp: "2026-02-02 13:09:05", confidence: "Medium" },
+    { ticker: "TLT",  signal: "BULLISH_BIAS", timestamp: "2026-02-02 13:07:33", confidence: "Low" },
   ],
   diagnostics: [
     {
@@ -167,13 +167,29 @@ export function normalizeDashboardData(payload: any): DashboardData | null {
     ? raw.systemAssessment.filter((x: any) => typeof x === "string").slice(0, 6)
     : sampleDashboardData.systemAssessment;
 
+  const toSignalType = (value: any): SignalType => {
+    const normalized = String(value ?? "").toUpperCase().trim();
+
+    // New safe vocabulary
+    if (normalized === "BULLISH_BIAS") return "BULLISH_BIAS";
+    if (normalized === "NEUTRAL_BIAS") return "NEUTRAL_BIAS";
+    if (normalized === "BEARISH_BIAS") return "BEARISH_BIAS";
+
+    // Backward compatibility mapping from legacy values
+    if (normalized === "BUY") return "BULLISH_BIAS";
+    if (normalized === "HOLD") return "NEUTRAL_BIAS";
+    if (normalized === "SELL") return "BEARISH_BIAS";
+
+    return "NEUTRAL_BIAS";
+  };
+
   const signals: SignalRow[] = Array.isArray(raw.signals)
     ? raw.signals
         .filter((r: any) => r && typeof r === "object")
         .map((r: any) => ({
           ticker: String(r.ticker ?? "").toUpperCase().trim(),
-          signal: (String(r.signal ?? "HOLD").toUpperCase() as SignalType) || "HOLD",
-          timestamp: String(r.timestamp ?? ""),
+          signal: toSignalType(r.signal),
+          timestamp: String(r.timestamp ?? r.ts ?? ""),
           confidence: (String(r.confidence ?? "Medium") as ConfidenceLevel) || "Medium",
         }))
         .filter((r: SignalRow) => !!r.ticker && !!r.timestamp)
@@ -186,7 +202,7 @@ export function normalizeDashboardData(payload: any): DashboardData | null {
         .map((d: any) => ({
           label: String(d.label ?? ""),
           state: String(d.state ?? ""),
-          summary: String(d.summary ?? ""),
+          summary: String(d.summary ?? d.note ?? ""),
           tone:
             d.tone === "on" || d.tone === "neutral" || d.tone === "off"
               ? d.tone
@@ -205,9 +221,15 @@ export function normalizeDashboardData(payload: any): DashboardData | null {
     signals,
     diagnostics,
     history: {
-      transitions: Array.isArray(history?.transitions) ? history.transitions : sampleDashboardData.history.transitions,
-      noTradePeriods: Array.isArray(history?.noTradePeriods) ? history.noTradePeriods : sampleDashboardData.history.noTradePeriods,
-      signalFrequency: Array.isArray(history?.signalFrequency) ? history.signalFrequency : sampleDashboardData.history.signalFrequency,
+      transitions: Array.isArray(history?.transitions)
+        ? history.transitions
+        : sampleDashboardData.history.transitions,
+      noTradePeriods: Array.isArray(history?.noTradePeriods)
+        ? history.noTradePeriods
+        : sampleDashboardData.history.noTradePeriods,
+      signalFrequency: Array.isArray(history?.signalFrequency)
+        ? history.signalFrequency
+        : sampleDashboardData.history.signalFrequency,
     },
     guidance: typeof raw.guidance === "string" ? raw.guidance : sampleDashboardData.guidance,
   };
