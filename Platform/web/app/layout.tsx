@@ -2,8 +2,8 @@ import "./globals.css";
 import Providers from "./providers";
 
 export const metadata = {
-  title: "BotTrader — Control Plane",
-  description: "BotTrader control plane UI (UI → API → Runtime → Bot).",
+  title: "Apter Financial",
+  description: "Disciplined trading signals. Rules-based market analysis platform.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
