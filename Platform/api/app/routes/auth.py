@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
@@ -10,6 +11,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.services.twofa_service import decrypt_secret, verify_backup_code, verify_totp
 from app.services.auth_service import create_access_token, hash_password, verify_password
+from app.services.hubspot_service import sync_contact_to_hubspot
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -18,6 +20,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
+    name: Optional[str] = None
 
 
 class RegisterResponse(BaseModel):
@@ -47,6 +50,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 @router.post("/register", response_model=RegisterResponse)
 def register(
     payload: RegisterRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     existing = db.query(User).filter(User.email == payload.email).first()
@@ -56,12 +60,24 @@ def register(
     user = User(
         email=str(payload.email),
         hashed_password=hash_password(payload.password),
+        full_name=payload.name,
         subscription_tier="observer",
         subscription_status="active",
     )
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    # Fire-and-forget HubSpot contact sync
+    background_tasks.add_task(
+        sync_contact_to_hubspot,
+        user_id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        subscription_tier=user.subscription_tier,
+        subscription_status=user.subscription_status,
+        created_at=user.created_at,
+    )
 
     access_token = create_access_token(
         data={"sub": str(user.id)},
