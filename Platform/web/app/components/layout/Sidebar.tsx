@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Lock } from "lucide-react";
 import { NAV_ITEMS } from "./NavItems";
+import { useAuth } from "../../hooks/useAuth";
+import { tierAtLeast } from "@/lib/tiers";
 
 export function Sidebar({
   collapsed,
@@ -14,6 +17,8 @@ export function Sidebar({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const userTier = user?.tier ?? "observer";
 
   return (
     <aside
@@ -26,12 +31,12 @@ export function Sidebar({
       <div className="h-14 px-3 flex items-center justify-between border-b">
         <div className="flex items-center gap-2 overflow-hidden">
           <div className="h-9 w-9 rounded-full border flex items-center justify-center font-bold">
-            BT
+            A
           </div>
           {!collapsed && (
             <div className="leading-tight">
-              <div className="font-semibold">BotTrader</div>
-              <div className="text-xs text-muted-foreground">Control Plane</div>
+              <div className="font-semibold">Apter</div>
+              <div className="text-xs text-muted-foreground">Financial</div>
             </div>
           )}
         </div>
@@ -51,19 +56,34 @@ export function Sidebar({
         {NAV_ITEMS.map((item) => {
           const active = pathname === item.href;
           const Icon = item.icon;
+          const locked = item.minTier
+            ? !tierAtLeast(userTier, item.minTier)
+            : false;
+
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={locked ? "/plans" : item.href}
               onClick={onNavigate}
               className={[
                 "flex items-center gap-3 rounded px-3 py-2 border border-transparent",
-                active ? "bg-muted border-border" : "hover:bg-muted/60",
+                locked
+                  ? "opacity-40 cursor-default"
+                  : active
+                  ? "bg-muted border-border"
+                  : "hover:bg-muted/60",
               ].join(" ")}
-              title={item.label}
+              title={
+                locked
+                  ? `Upgrade to ${item.minTier} to access ${item.label}`
+                  : item.label
+              }
             >
               <Icon size={18} />
-              {!collapsed && <span className="text-sm">{item.label}</span>}
+              {!collapsed && (
+                <span className="text-sm flex-1">{item.label}</span>
+              )}
+              {!collapsed && locked && <Lock size={14} className="text-muted-foreground" />}
             </Link>
           );
         })}
@@ -73,7 +93,7 @@ export function Sidebar({
         <div className="absolute bottom-4 left-3 right-3">
           <div className="border rounded p-3 text-xs text-muted-foreground">
             <div className="font-semibold mb-1 text-foreground">Safety rule</div>
-            UI never trades. UI → API → Runtime → Bot.
+            UI never trades. UI provides analysis only.
           </div>
         </div>
       )}

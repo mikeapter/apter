@@ -8,6 +8,7 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.dependencies import get_current_user
 from app.models.user import User
 from app.services.twofa_service import decrypt_secret, verify_backup_code, verify_totp
 from app.services.auth_service import create_access_token, hash_password, verify_password
@@ -180,4 +181,17 @@ def login_2fa(
     return {
         "access_token": access_token,
         "token_type": "bearer",
+    }
+
+
+# -------------------------
+# WHO AM I (token validation)
+# -------------------------
+@router.get("/me")
+def me(user: User = Depends(get_current_user)):
+    return {
+        "user_id": user.id,
+        "email": user.email,
+        "tier": user.subscription_tier,
+        "status": user.subscription_status,
     }
