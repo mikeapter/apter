@@ -12,6 +12,9 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
 
+    # Profile
+    full_name = Column(String, nullable=True)
+
     # 2FA
     is_2fa_enabled = Column(Boolean, default=False)
     twofa_secret = Column(String, nullable=True)
