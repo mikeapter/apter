@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes import auth, twofa, bots, logs, system, dashboard, signals, insights
-from app.routes import subscriptions
+from app.routes import subscriptions, admin
 from app.routes import stripe as stripe_routes
 from app.db.init_db import init_db
 
@@ -68,3 +68,4 @@ app.include_router(signals.router)
 app.include_router(insights.router)
 app.include_router(subscriptions.router)
 app.include_router(stripe_routes.router)
+app.include_router(admin.router)  # TODO: remove after one-time backfill
