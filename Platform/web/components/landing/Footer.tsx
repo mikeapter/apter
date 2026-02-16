@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export default function Footer() {
   return (
@@ -7,13 +8,14 @@ export default function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Brand */}
           <div className="sm:col-span-2 lg:col-span-1">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="h-7 w-7 rounded-md bg-white/10 border border-white/10 flex items-center justify-center text-xs font-bold text-foreground">
-                A
-              </div>
-              <span className="text-sm font-semibold text-foreground">
-                Apter Financial
-              </span>
+            <div className="mb-3">
+              <Image
+                src="/logo.svg"
+                alt="Apter Financial"
+                width={140}
+                height={42}
+                className="h-8 w-auto"
+              />
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed max-w-xs">
               Signals-only trading intelligence. We provide analytical tools and

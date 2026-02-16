@@ -13,6 +13,7 @@ export type StoredUser = {
   email: string;
   first_name: string;
   last_name: string;
+  full_name?: string;
 };
 
 export function getToken(): string | null {
