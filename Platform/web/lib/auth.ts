@@ -1,5 +1,19 @@
+/**
+ * Client-side auth token helpers.
+ * Token is stored in localStorage under a well-known key.
+ * A session cookie is set for middleware/SSR awareness.
+ */
+
 const LS_TOKEN = "apter_token";
 const COOKIE_NAME = "apter_session";
+const USER_KEY = "apter_user";
+
+export type StoredUser = {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+};
 
 export function getToken(): string | null {
   try {
@@ -29,4 +43,35 @@ export function clearToken(): void {
 
 export function isLoggedIn(): boolean {
   return !!getToken();
+}
+
+export function getStoredUser(): StoredUser | null {
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as StoredUser;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredUser(user: StoredUser): void {
+  try {
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+  } catch {
+    // Storage unavailable
+  }
+}
+
+export function clearStoredUser(): void {
+  try {
+    localStorage.removeItem(USER_KEY);
+  } catch {
+    // Storage unavailable
+  }
+}
+
+export function logout(): void {
+  clearToken();
+  clearStoredUser();
 }
