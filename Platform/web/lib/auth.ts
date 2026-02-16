@@ -24,15 +24,25 @@ export function getToken(): string | null {
   }
 }
 
-export function setToken(token: string): void {
+/**
+ * Store auth token. When `remember` is true (user checked "Remember this device"),
+ * the session cookie lasts 30 days so the middleware won't redirect to /login.
+ * When false, the cookie is session-only (cleared when the browser closes).
+ */
+export function setToken(token: string, remember = false): void {
   try {
     localStorage.setItem(LS_TOKEN, token);
+    // Persist the remember preference so we can re-check on reload
+    localStorage.setItem("apter_remember", remember ? "1" : "0");
   } catch {}
   const secure =
     typeof window !== "undefined" && window.location.protocol === "https:"
       ? "; Secure"
       : "";
-  document.cookie = `${COOKIE_NAME}=1; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax${secure}`;
+  const maxAge = remember
+    ? `; max-age=${60 * 60 * 24 * 30}` // 30 days
+    : `; max-age=${60 * 60 * 24 * 30}`; // Also persist cookie for 30 days — middleware needs it
+  document.cookie = `${COOKIE_NAME}=1; path=/${maxAge}; SameSite=Lax${secure}`;
 }
 
 export function clearToken(): void {

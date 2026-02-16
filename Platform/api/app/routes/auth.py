@@ -63,6 +63,7 @@ class RegisterResponse(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    remember_device: bool = False
 
 
 class Login2FARequest(BaseModel):
@@ -72,6 +73,7 @@ class Login2FARequest(BaseModel):
 
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
+REMEMBER_TOKEN_EXPIRE_DAYS = 30
 
 
 # -------------------------
@@ -152,9 +154,15 @@ def login(
             "message": "2FA required",
         }
 
+    # "Remember this device" → 30-day token; otherwise 60 minutes
+    if payload.remember_device:
+        token_expiry = timedelta(days=REMEMBER_TOKEN_EXPIRE_DAYS)
+    else:
+        token_expiry = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+
     access_token = create_access_token(
         data={"sub": str(user.id)},
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+        expires_delta=token_expiry,
     )
 
     return {
