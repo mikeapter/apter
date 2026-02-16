@@ -6,6 +6,8 @@ Safe for existing data:
   - Existing rows get empty string (not NULL)
   - No data loss, fully reversible
 
+Works with both SQLite (local dev) and PostgreSQL (production).
+
 Run:
   cd Platform/api
   python -m migrations.add_name_columns
@@ -15,95 +17,81 @@ Rollback:
   python -m migrations.add_name_columns --rollback
 """
 
-import sys
-import sqlite3
 import os
+import sys
+
+from sqlalchemy import create_engine, inspect, text
 
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "bottrader.db")
-# Also check repo root (where uvicorn runs from)
-DB_PATH_ALT = os.path.join(os.path.dirname(__file__), "..", "..", "..", "bottrader.db")
+def get_engine():
+    """Create engine from DATABASE_URL env var, falling back to local SQLite."""
+    db_url = os.getenv("DATABASE_URL", "sqlite:///./bottrader.db")
+    # Render provides postgres:// but SQLAlchemy 2.x requires postgresql://
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+    connect_args = {}
+    if db_url.startswith("sqlite"):
+        connect_args["check_same_thread"] = False
+    return create_engine(db_url, connect_args=connect_args)
 
 
-def get_db_path() -> str:
-    """Find the database file."""
-    for p in [DB_PATH, DB_PATH_ALT]:
-        resolved = os.path.abspath(p)
-        if os.path.exists(resolved):
-            return resolved
-    # Default: create alongside api directory
-    return os.path.abspath(DB_PATH_ALT)
-
-
-def column_exists(cursor: sqlite3.Cursor, table: str, column: str) -> bool:
-    cursor.execute(f"PRAGMA table_info({table})")
-    columns = [row[1] for row in cursor.fetchall()]
-    return column in columns
+def get_existing_columns(engine, table: str) -> set[str]:
+    """Get existing column names (works with SQLite and PostgreSQL)."""
+    insp = inspect(engine)
+    if not insp.has_table(table):
+        return set()
+    return {col["name"] for col in insp.get_columns(table)}
 
 
 def migrate():
-    db_path = get_db_path()
-    print(f"Database: {db_path}")
+    engine = get_engine()
+    print(f"Database: {engine.url}")
 
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
+    existing = get_existing_columns(engine, "users")
+    if not existing:
+        print("  Table 'users' not found. Nothing to migrate.")
+        return
 
     added = []
+    with engine.begin() as conn:
+        if "first_name" not in existing:
+            conn.execute(text("ALTER TABLE users ADD COLUMN first_name VARCHAR DEFAULT ''"))
+            added.append("first_name")
+            print("  Added column: first_name")
+        else:
+            print("  Column first_name already exists, skipping.")
 
-    if not column_exists(cursor, "users", "first_name"):
-        cursor.execute("ALTER TABLE users ADD COLUMN first_name TEXT DEFAULT ''")
-        added.append("first_name")
-        print("  Added column: first_name")
-    else:
-        print("  Column first_name already exists, skipping.")
+        if "last_name" not in existing:
+            conn.execute(text("ALTER TABLE users ADD COLUMN last_name VARCHAR DEFAULT ''"))
+            added.append("last_name")
+            print("  Added column: last_name")
+        else:
+            print("  Column last_name already exists, skipping.")
 
-    if not column_exists(cursor, "users", "last_name"):
-        cursor.execute("ALTER TABLE users ADD COLUMN last_name TEXT DEFAULT ''")
-        added.append("last_name")
-        print("  Added column: last_name")
-    else:
-        print("  Column last_name already exists, skipping.")
+        # Ensure existing NULL values are set to empty string
+        if added:
+            conn.execute(text("UPDATE users SET first_name = '' WHERE first_name IS NULL"))
+            conn.execute(text("UPDATE users SET last_name = '' WHERE last_name IS NULL"))
+            print("  Backfilled NULL values to empty string.")
 
-    # Ensure existing NULL values are set to empty string
-    if added:
-        cursor.execute("UPDATE users SET first_name = '' WHERE first_name IS NULL")
-        cursor.execute("UPDATE users SET last_name = '' WHERE last_name IS NULL")
-        print(f"  Backfilled NULL values to empty string.")
-
-    conn.commit()
-    conn.close()
     print("Migration complete.")
 
 
 def rollback():
-    """
-    SQLite does not support DROP COLUMN in older versions.
-    For SQLite 3.35+, we can drop columns directly.
-    For older versions, this prints manual instructions.
-    """
-    db_path = get_db_path()
-    print(f"Database: {db_path}")
+    engine = get_engine()
+    print(f"Database: {engine.url}")
 
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
+    existing = get_existing_columns(engine, "users")
 
-    sqlite_version = sqlite3.sqlite_version_info
-
-    if sqlite_version >= (3, 35, 0):
-        if column_exists(cursor, "users", "first_name"):
-            cursor.execute("ALTER TABLE users DROP COLUMN first_name")
+    with engine.begin() as conn:
+        if "first_name" in existing:
+            conn.execute(text("ALTER TABLE users DROP COLUMN first_name"))
             print("  Dropped column: first_name")
-        if column_exists(cursor, "users", "last_name"):
-            cursor.execute("ALTER TABLE users DROP COLUMN last_name")
+        if "last_name" in existing:
+            conn.execute(text("ALTER TABLE users DROP COLUMN last_name"))
             print("  Dropped column: last_name")
-        conn.commit()
-        print("Rollback complete.")
-    else:
-        print(f"  SQLite version {sqlite3.sqlite_version} does not support DROP COLUMN.")
-        print("  To rollback manually, recreate the table without the name columns.")
-        print("  Or upgrade SQLite to 3.35+.")
 
-    conn.close()
+    print("Rollback complete.")
 
 
 if __name__ == "__main__":
