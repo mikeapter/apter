@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { apiPost, apiGet } from "@/lib/api";
@@ -18,6 +19,7 @@ type ProfileResponse = {
   email: string;
   first_name: string;
   last_name: string;
+  full_name: string;
 };
 
 export default function LoginPage() {
@@ -88,6 +90,7 @@ export default function LoginPage() {
         email: profileResult.data.email,
         first_name: profileResult.data.first_name,
         last_name: profileResult.data.last_name,
+        full_name: profileResult.data.full_name,
       });
     }
 
@@ -102,14 +105,16 @@ export default function LoginPage() {
         <div className="mb-6">
           <Link
             href="/"
-            className="flex items-center gap-2 mb-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm w-fit"
+            className="flex items-center mb-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm w-fit"
           >
-            <div className="h-7 w-7 rounded-md bg-white/10 border border-white/10 flex items-center justify-center text-xs font-bold text-foreground">
-              A
-            </div>
-            <span className="text-sm font-semibold text-foreground">
-              Apter Financial
-            </span>
+            <Image
+              src="/logo.svg"
+              alt="Apter Financial"
+              width={140}
+              height={42}
+              priority
+              className="h-8 w-auto"
+            />
           </Link>
           <h1 className="text-xl font-bold text-foreground">
             Sign in to your account

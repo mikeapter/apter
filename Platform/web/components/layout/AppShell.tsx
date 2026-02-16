@@ -80,12 +80,20 @@ export default function AppShell({ children, className }: AppShellProps) {
     window.location.href = "/";
   }
 
-  const greeting = user?.first_name
-    ? `Welcome back, ${user.first_name}`
+  // Derive display name: prefer first_name, then full_name, then email prefix
+  const displayName = user?.first_name
+    || user?.full_name?.split(" ")[0]
+    || user?.email?.split("@")[0]
+    || "";
+
+  const greeting = displayName
+    ? `Welcome back, ${displayName}`
     : "Apter Financial";
 
   const initials = user
-    ? `${(user.first_name || "")[0] || ""}${(user.last_name || "")[0] || ""}`.toUpperCase() || "U"
+    ? (
+        `${(user.first_name || user.full_name?.split(" ")[0] || "")[0] || ""}${(user.last_name || user.full_name?.split(" ").slice(1).join(" ") || "")[0] || ""}`.toUpperCase() || "U"
+      )
     : "U";
 
   return (

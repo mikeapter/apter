@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { apiPost } from "@/lib/api";
@@ -155,14 +156,16 @@ export default function SignupPage() {
         <div className="mb-6">
           <Link
             href="/"
-            className="flex items-center gap-2 mb-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm w-fit"
+            className="flex items-center mb-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm w-fit"
           >
-            <div className="h-7 w-7 rounded-md bg-white/10 border border-white/10 flex items-center justify-center text-xs font-bold text-foreground">
-              A
-            </div>
-            <span className="text-sm font-semibold text-foreground">
-              Apter Financial
-            </span>
+            <Image
+              src="/logo.svg"
+              alt="Apter Financial"
+              width={140}
+              height={42}
+              priority
+              className="h-8 w-auto"
+            />
           </Link>
           <h1 className="text-xl font-bold text-foreground">
             Create your account

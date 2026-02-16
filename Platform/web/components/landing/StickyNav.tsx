@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Menu, X } from "lucide-react";
 
@@ -48,15 +49,17 @@ export default function StickyNav() {
           {/* Logo */}
           <Link
             href="/"
-            className="flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+            className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
             aria-label="Apter Financial home"
           >
-            <div className="h-8 w-8 rounded-md bg-white/10 border border-white/10 flex items-center justify-center text-sm font-bold text-foreground">
-              A
-            </div>
-            <span className="text-sm font-semibold tracking-wide text-foreground">
-              Apter Financial
-            </span>
+            <Image
+              src="/logo.svg"
+              alt="Apter Financial"
+              width={160}
+              height={48}
+              priority
+              className="h-9 w-auto"
+            />
           </Link>
 
           {/* Desktop links */}
