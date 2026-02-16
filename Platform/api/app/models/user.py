@@ -8,11 +8,15 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
+    # Profile identity
+    first_name = Column(String, nullable=True, default="")
+    last_name = Column(String, nullable=True, default="")
+
     # Auth
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
 
-    # Profile
+    # Profile (legacy column from earlier migration — kept for backward compat)
     full_name = Column(String, nullable=True)
 
     # 2FA
@@ -41,3 +45,9 @@ class User(Base):
     subscription_updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def display_name(self) -> str:
+        """Derived display name from first + last, falling back to full_name column."""
+        parts = [self.first_name or "", self.last_name or ""]
+        derived = " ".join(p for p in parts if p).strip()
+        return derived or self.full_name or ""

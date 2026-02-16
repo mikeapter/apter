@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -17,16 +18,44 @@ from app.services.hubspot_service import sync_contact_to_hubspot
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
+# Name pattern: 2-50 chars, letters, spaces, hyphens, apostrophes
+_NAME_PATTERN = re.compile(r"^[a-zA-Z\s'\-]{2,50}$")
+
 
 class RegisterRequest(BaseModel):
+    first_name: str
+    last_name: str
     email: EmailStr
     password: str
-    name: Optional[str] = None
+    referral_source: Optional[str] = None
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Name is required")
+        if len(v) < 2:
+            raise ValueError("Name must be at least 2 characters")
+        if len(v) > 50:
+            raise ValueError("Name must be 50 characters or fewer")
+        if not _NAME_PATTERN.match(v):
+            raise ValueError("Name may only contain letters, spaces, hyphens, and apostrophes")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 10:
+            raise ValueError("Password must be at least 10 characters")
+        return v
 
 
 class RegisterResponse(BaseModel):
     user_id: int
     email: EmailStr
+    first_name: str
+    last_name: str
     access_token: str
     token_type: str = "bearer"
 
@@ -54,14 +83,19 @@ def register(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    existing = db.query(User).filter(User.email == payload.email).first()
+    normalized_email = str(payload.email).lower().strip()
+    existing = db.query(User).filter(User.email == normalized_email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    first = payload.first_name.strip()
+    last = payload.last_name.strip()
     user = User(
-        email=str(payload.email),
+        first_name=first,
+        last_name=last,
+        full_name=f"{first} {last}".strip(),
+        email=normalized_email,
         hashed_password=hash_password(payload.password),
-        full_name=payload.name,
         subscription_tier="observer",
         subscription_status="active",
     )
@@ -88,6 +122,8 @@ def register(
     return RegisterResponse(
         user_id=user.id,
         email=user.email,
+        first_name=user.first_name or "",
+        last_name=user.last_name or "",
         access_token=access_token,
     )
 
@@ -100,7 +136,8 @@ def login(
     payload: LoginRequest,
     db: Session = Depends(get_db),
 ):
-    user = db.query(User).filter(User.email == payload.email).first()
+    normalized_email = str(payload.email).lower().strip()
+    user = db.query(User).filter(User.email == normalized_email).first()
 
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
@@ -108,7 +145,6 @@ def login(
             detail="Invalid credentials",
         )
 
-    # 🚨 2FA gate
     if user.is_2fa_enabled:
         return {
             "requires_2fa": True,
@@ -116,7 +152,6 @@ def login(
             "message": "2FA required",
         }
 
-    # ✅ No 2FA → issue token
     access_token = create_access_token(
         data={"sub": str(user.id)},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
@@ -171,13 +206,11 @@ def login_2fa(
         user.backup_codes = remaining_codes
         db.commit()
 
-    # ✅ 2FA success → issue token
     access_token = create_access_token(
         data={"sub": str(user.id)},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
 
-    # (Trust-device cookie logic added in later step)
     return {
         "access_token": access_token,
         "token_type": "bearer",
