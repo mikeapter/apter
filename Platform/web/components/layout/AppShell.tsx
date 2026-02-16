@@ -4,7 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { Menu, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getStoredUser, getToken, logout as clearAuth } from "@/lib/auth";
+import { getStoredUser, getToken, setStoredUser, logout as clearAuth } from "@/lib/auth";
+import { apiGet } from "@/lib/api";
 import type { StoredUser } from "@/lib/auth";
 import Sidebar from "./Sidebar";
 
@@ -59,10 +60,34 @@ export default function AppShell({ children, className }: AppShellProps) {
       if (raw === "1") setCollapsed(true);
     } catch {}
 
-    // Load user info
+    // Load user info from localStorage
     const token = getToken();
     setIsLoggedIn(!!token);
-    setUser(getStoredUser());
+    const storedUser = getStoredUser();
+    setUser(storedUser);
+
+    // If logged in but no name data, fetch profile from API
+    if (token && (!storedUser?.first_name && !storedUser?.full_name)) {
+      apiGet<{ id: number; email: string; first_name: string; last_name: string; full_name: string }>(
+        "/api/me",
+        undefined,
+        token
+      ).then((res) => {
+        if (res.ok) {
+          const updated: StoredUser = {
+            id: res.data.id,
+            email: res.data.email,
+            first_name: res.data.first_name,
+            last_name: res.data.last_name,
+            full_name: res.data.full_name,
+          };
+          setStoredUser(updated);
+          setUser(updated);
+        }
+      }).catch(() => {
+        // Silently ignore — greeting will use email fallback
+      });
+    }
   }, []);
 
   React.useEffect(() => {

@@ -49,17 +49,20 @@ export default function StickyNav() {
           {/* Logo */}
           <Link
             href="/"
-            className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+            className="flex items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
             aria-label="Apter Financial home"
           >
             <Image
-              src="/logo.svg"
+              src="/logo.png"
               alt="Apter Financial"
-              width={160}
-              height={48}
+              width={36}
+              height={36}
               priority
-              className="h-9 w-auto"
+              className="h-9 w-9 rounded-full"
             />
+            <span className="text-sm font-semibold tracking-wide text-foreground">
+              Apter Financial
+            </span>
           </Link>
 
           {/* Desktop links */}

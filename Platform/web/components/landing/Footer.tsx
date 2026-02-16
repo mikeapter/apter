@@ -8,14 +8,17 @@ export default function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Brand */}
           <div className="sm:col-span-2 lg:col-span-1">
-            <div className="mb-3">
+            <div className="flex items-center gap-2.5 mb-3">
               <Image
-                src="/logo.svg"
+                src="/logo.png"
                 alt="Apter Financial"
-                width={140}
-                height={42}
-                className="h-8 w-auto"
+                width={32}
+                height={32}
+                className="h-8 w-8 rounded-full"
               />
+              <span className="text-sm font-semibold text-foreground">
+                Apter Financial
+              </span>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed max-w-xs">
               Signals-only trading intelligence. We provide analytical tools and

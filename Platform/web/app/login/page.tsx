@@ -52,6 +52,7 @@ export default function LoginPage() {
     const result = await apiPost<LoginResponse>("/auth/login", {
       email: email.trim().toLowerCase(),
       password,
+      remember_device: rememberDevice,
     });
 
     setSubmitting(false);
@@ -75,22 +76,42 @@ export default function LoginPage() {
     }
 
     const loginData = result.data as { access_token: string; token_type: string };
-    setToken(loginData.access_token);
+    setToken(loginData.access_token, rememberDevice);
 
-    // Fetch user profile to store name
-    const profileResult = await apiGet<ProfileResponse>(
-      "/api/me",
-      undefined,
-      loginData.access_token
-    );
+    // Fetch user profile to store name for greeting
+    try {
+      const profileResult = await apiGet<ProfileResponse>(
+        "/api/me",
+        undefined,
+        loginData.access_token
+      );
 
-    if (profileResult.ok) {
+      if (profileResult.ok) {
+        setStoredUser({
+          id: profileResult.data.id,
+          email: profileResult.data.email,
+          first_name: profileResult.data.first_name,
+          last_name: profileResult.data.last_name,
+          full_name: profileResult.data.full_name,
+        });
+      } else {
+        // Profile fetch failed — store email so greeting can still show something
+        setStoredUser({
+          id: 0,
+          email: email.trim().toLowerCase(),
+          first_name: "",
+          last_name: "",
+          full_name: "",
+        });
+      }
+    } catch {
+      // Network error on profile — store email as fallback
       setStoredUser({
-        id: profileResult.data.id,
-        email: profileResult.data.email,
-        first_name: profileResult.data.first_name,
-        last_name: profileResult.data.last_name,
-        full_name: profileResult.data.full_name,
+        id: 0,
+        email: email.trim().toLowerCase(),
+        first_name: "",
+        last_name: "",
+        full_name: "",
       });
     }
 
@@ -105,16 +126,19 @@ export default function LoginPage() {
         <div className="mb-6">
           <Link
             href="/"
-            className="flex items-center mb-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm w-fit"
+            className="flex items-center gap-2.5 mb-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm w-fit"
           >
             <Image
-              src="/logo.svg"
+              src="/logo.png"
               alt="Apter Financial"
-              width={140}
-              height={42}
+              width={32}
+              height={32}
               priority
-              className="h-8 w-auto"
+              className="h-8 w-8 rounded-full"
             />
+            <span className="text-sm font-semibold text-foreground">
+              Apter Financial
+            </span>
           </Link>
           <h1 className="text-xl font-bold text-foreground">
             Sign in to your account

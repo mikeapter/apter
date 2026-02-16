@@ -156,16 +156,19 @@ export default function SignupPage() {
         <div className="mb-6">
           <Link
             href="/"
-            className="flex items-center mb-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm w-fit"
+            className="flex items-center gap-2.5 mb-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm w-fit"
           >
             <Image
-              src="/logo.svg"
+              src="/logo.png"
               alt="Apter Financial"
-              width={140}
-              height={42}
+              width={32}
+              height={32}
               priority
-              className="h-8 w-auto"
+              className="h-8 w-8 rounded-full"
             />
+            <span className="text-sm font-semibold text-foreground">
+              Apter Financial
+            </span>
           </Link>
           <h1 className="text-xl font-bold text-foreground">
             Create your account
