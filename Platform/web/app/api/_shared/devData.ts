@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 
-export type PlanTier = "observer" | "signals" | "pro";
+export type PlanTier = "free" | "standard" | "pro";
 
 export type Plan = {
   tier: PlanTier;
@@ -85,60 +85,83 @@ export function nowIso() {
 }
 
 export function isPlanTier(v: any): v is PlanTier {
-  return v === "observer" || v === "signals" || v === "pro";
+  return v === "free" || v === "standard" || v === "pro";
 }
 
 const PLANS: Plan[] = [
   {
-    tier: "observer",
-    name: "Observer",
+    tier: "free",
+    name: "Free",
     price_usd_month: 0,
-    target_user: "Read-only review of system posture and delayed signals.",
+    target_user: "Self-directed investors who want institutional-quality analytics at no cost.",
     features: [
-      "Market regime status bar",
-      "System assessment memorandum",
-      "Delayed signal visibility",
-      "Limited history visibility",
+      "Full financial statements",
+      "Institutional dashboard UI",
+      "Basic screener (limited filters)",
+      "Watchlist with cost basis tracking",
+      "Earnings calendar",
+      "Basic factor score",
+      "AI summary (short, factual)",
     ],
-    exclusions: ["Real-time feed", "Priority diagnostics", "Extended history", "Alerts"],
+    exclusions: [
+      "Advanced screener filters",
+      "Risk score engine",
+      "Portfolio risk analysis",
+      "Insider activity tracking",
+      "Historical signal backtests",
+    ],
     limits: {
-      signal_delay_seconds: 86400, // 24h
+      signal_delay_seconds: 86400,
       max_signals_per_response: 0,
       history_days: 7,
       alerts: false,
     },
   },
   {
-    tier: "signals",
-    name: "Signals",
-    price_usd_month: 9,
-    target_user: "Timely signal access with standard diagnostics.",
+    tier: "standard",
+    name: "Standard",
+    price_usd_month: 25,
+    target_user: "Serious retail investors who need advanced research and risk analytics.",
     features: [
-      "Timely signals feed",
-      "System history panel",
-      "Standard risk diagnostics",
-      "Expanded history access",
+      "Everything in Free",
+      "Advanced screener",
+      "Risk score engine (security + portfolio level)",
+      "Portfolio risk analysis (concentration, volatility, drawdown, correlation)",
+      "Insider activity tracking",
+      "Earnings probability model (scenario probabilities)",
+      "News impact scoring",
+      "Historical signal backtests (with hypothetical-performance disclaimer)",
     ],
-    exclusions: ["Premium diagnostics depth", "Advanced analytics exports", "Alerts"],
+    exclusions: [
+      "Regime detection engine",
+      "Factor exposure analysis",
+      "Beta-adjusted risk modeling",
+      "AI 10-K deep summary",
+      "Sector rotation dashboard",
+    ],
     limits: {
-      signal_delay_seconds: 300, // 5m
+      signal_delay_seconds: 300,
       max_signals_per_response: 25,
-      history_days: 30,
+      history_days: 90,
       alerts: false,
     },
   },
   {
     tier: "pro",
     name: "Pro",
-    price_usd_month: 29,
-    target_user: "Full diagnostics context and minimal latency on signals.",
+    price_usd_month: 49,
+    target_user: "Advanced users who want institutional-style hedge-fund analytics (analytics only).",
     features: [
-      "Near real-time signals feed",
-      "Full diagnostics panel depth",
-      "Extended history access",
-      "Priority refresh cadence",
+      "Everything in Standard",
+      "Regime detection engine",
+      "Factor exposure analysis",
+      "Beta-adjusted risk modeling",
+      "Event volatility forecasts",
+      "AI 10-K deep summary",
+      "Sector rotation dashboard",
+      "Allocation scenario explorer (comparative what-if scenarios)",
     ],
-    exclusions: ["Payments/alerts (not implemented yet)"],
+    exclusions: ["None — full platform access"],
     limits: {
       signal_delay_seconds: 0,
       max_signals_per_response: 50,
@@ -169,9 +192,9 @@ export function getBearerToken(req: Request): string | null {
 
 export function resolveTierFromRequest(req: Request): PlanTier {
   const token = getBearerToken(req);
-  if (!token) return "observer";
+  if (!token) return "free";
   const sess = sessionsByToken.get(token);
-  return sess?.tier ?? "observer";
+  return sess?.tier ?? "free";
 }
 
 export function getSessionFromRequest(req: Request): SessionRecord | null {
@@ -202,7 +225,7 @@ export function registerUser(email: string, password: string): RegisterResponse 
     token,
     user_id: u.user_id,
     email: u.email,
-    tier: "observer",
+    tier: "free",
     status: "active",
     updated_at: nowIso(),
   };
@@ -228,7 +251,7 @@ export function loginUser(email: string, password: string): LoginResponse {
     token,
     user_id: u.user_id,
     email: u.email,
-    tier: "observer",
+    tier: "free",
     status: "active",
     updated_at: nowIso(),
   };
@@ -250,8 +273,7 @@ export function buildSignalsFeed(tier: PlanTier, limit: number): SignalsFeedResp
   const plan = getPlan(tier);
   const now = Math.floor(Date.now() / 1000);
 
-  // Observer: show nothing (consistent with “24h delay” policy)
-  if (tier === "observer") {
+  if (tier === "free") {
     return {
       tier,
       mode: "signals_only",
@@ -262,11 +284,11 @@ export function buildSignalsFeed(tier: PlanTier, limit: number): SignalsFeedResp
   }
 
   const samples = [
-    { symbol: "AAPL", side: "HOLD", confidence: 0.58, rationale: "Volatility elevated; confirmation insufficient." },
-    { symbol: "MSFT", side: "HOLD", confidence: 0.62, rationale: "Trend persistence weak; maintain neutrality." },
-    { symbol: "NVDA", side: "SELL", confidence: 0.66, rationale: "Correlation risk rising; reduce concentration exposure." },
-    { symbol: "SPY", side: "HOLD", confidence: 0.55, rationale: "Regime neutral; exposure should remain selective." },
-    { symbol: "TLT", side: "BUY", confidence: 0.60, rationale: "Risk-off hedging demand present; liquidity acceptable." },
+    { symbol: "AAPL", side: "NEUTRAL_BIAS", confidence: 0.58, rationale: "Volatility elevated; confirmation insufficient." },
+    { symbol: "MSFT", side: "NEUTRAL_BIAS", confidence: 0.62, rationale: "Trend persistence weak; maintain neutrality." },
+    { symbol: "NVDA", side: "BEARISH_BIAS", confidence: 0.66, rationale: "Correlation risk rising; reduced concentration exposure indicated." },
+    { symbol: "SPY", side: "NEUTRAL_BIAS", confidence: 0.55, rationale: "Regime neutral; exposure should remain selective." },
+    { symbol: "TLT", side: "BULLISH_BIAS", confidence: 0.60, rationale: "Defensive hedging demand present; liquidity acceptable." },
   ];
 
   const n = Math.max(0, Math.min(limit, samples.length, plan.limits.max_signals_per_response || samples.length));

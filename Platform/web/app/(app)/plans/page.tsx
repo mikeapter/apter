@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
+import { COMPLIANCE } from "../../lib/compliance";
 
-type PlanTier = "observer" | "signals" | "pro";
+type PlanTier = "free" | "standard" | "pro";
 
 type Plan = {
   tier: PlanTier;
@@ -43,27 +44,6 @@ type SubscriptionMeResponse = {
   updated_at: string;
 };
 
-type SignalsFeedResponse = {
-  tier: PlanTier;
-  mode: string;
-  signal_delay_seconds: number;
-  signals: Array<{
-    id?: string;
-    ts?: number;
-    status?: string;
-    execution_mode?: string;
-    symbol?: string;
-    side?: string;
-    qty?: number;
-    strategy_id?: string;
-    confidence?: number;
-    rationale?: string;
-    blocked?: boolean;
-    reasons?: string[];
-  }>;
-  generated_at: string;
-};
-
 const LS_TOKEN = "apter_token";
 const LS_ADMIN_KEY = "apter_admin_key";
 
@@ -80,9 +60,6 @@ export default function PlansPage() {
 
   const [me, setMe] = useState<SubscriptionMeResponse | null>(null);
   const [meError, setMeError] = useState<string | null>(null);
-
-  const [feed, setFeed] = useState<SignalsFeedResponse | null>(null);
-  const [feedError, setFeedError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -116,26 +93,14 @@ export default function PlansPage() {
     setMe(r.data);
   }
 
-  async function refreshFeed() {
-    setFeedError(null);
-    setFeed(null);
-    const r = await apiGet<SignalsFeedResponse>("/v1/signals/feed?limit=25", undefined, token || undefined);
-    if (!r.ok) {
-      setFeedError(r.error);
-      return;
-    }
-    setFeed(r.data);
-  }
-
   useEffect(() => {
     refreshMe();
-    refreshFeed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const currentTier: PlanTier = useMemo(() => {
     if (me?.tier) return me.tier;
-    return "observer";
+    return "free";
   }, [me]);
 
   async function doRegister() {
@@ -146,7 +111,7 @@ export default function PlansPage() {
     try {
       localStorage.setItem(LS_TOKEN, r.data.access_token);
     } catch {}
-    setAuthMsg(`Registered: ${r.data.email} (Observer tier)`);
+    setAuthMsg(`Registered: ${r.data.email} (Free tier)`);
   }
 
   async function doLogin() {
@@ -197,7 +162,6 @@ export default function PlansPage() {
 
     setAuthMsg(`Tier set to: ${r.data.tier}`);
     await refreshMe();
-    await refreshFeed();
   }
 
   function saveAdminKey(v: string) {
@@ -212,140 +176,17 @@ export default function PlansPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
         <div className="text-2xl font-semibold">Subscription Plans</div>
-        <div className="text-muted-foreground">
-          Signals-only trading tool. No auto-execution. Plans control access to signals, history, and analytics.
+        <div className="text-muted-foreground text-sm">
+          Choose the analytics tier that fits your research needs. All tiers include the institutional-quality dashboard.
         </div>
       </div>
 
-      <div className="rounded-lg border border-border bg-card p-4">
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-1">
-            <div className="font-semibold mb-2">Login / Register (Dev)</div>
-            <div className="space-y-2">
-              <input
-                className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <input
-                className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm"
-                placeholder="Password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <div className="flex gap-2">
-                <button
-                  className="h-10 px-3 rounded-md border border-border hover:bg-muted text-sm font-semibold"
-                  onClick={doRegister}
-                >
-                  Register
-                </button>
-                <button
-                  className="h-10 px-3 rounded-md border border-border hover:bg-muted text-sm font-semibold"
-                  onClick={doLogin}
-                >
-                  Login
-                </button>
-                <button
-                  className="h-10 px-3 rounded-md border border-border hover:bg-muted text-sm font-semibold"
-                  onClick={doLogout}
-                >
-                  Logout
-                </button>
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Token stored in localStorage key: <span className="font-mono">{LS_TOKEN}</span>
-              </div>
-              {!!authMsg && <div className="text-sm">{authMsg}</div>}
-            </div>
-          </div>
-
-          <div className="lg:col-span-1">
-            <div className="font-semibold mb-2">Current Subscription</div>
-            {!token ? (
-              <div className="text-sm text-muted-foreground">
-                Not logged in. You are browsing as <span className="font-semibold">Observer</span>.
-              </div>
-            ) : me ? (
-              <div className="text-sm space-y-1">
-                <div>
-                  Tier: <span className="font-semibold">{me.tier.toUpperCase()}</span>
-                </div>
-                <div>
-                  Status: <span className="font-semibold">{me.status}</span>
-                </div>
-                <div className="text-xs text-muted-foreground">Updated: {me.updated_at}</div>
-              </div>
-            ) : meError ? (
-              <div className="text-sm text-red-400">{meError}</div>
-            ) : (
-              <div className="text-sm text-muted-foreground">Loading…</div>
-            )}
-
-            <div className="mt-4">
-              <div className="font-semibold mb-2">Dev Admin Key</div>
-              <input
-                className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm"
-                placeholder="X-Admin-Key (LOCAL_DEV_API_KEY)"
-                value={adminKey}
-                onChange={(e) => saveAdminKey(e.target.value)}
-              />
-              <div className="text-xs text-muted-foreground mt-1">
-                Used only to switch tiers locally via <span className="font-mono">/api/subscription/dev/set-tier</span>.
-              </div>
-            </div>
-          </div>
-
-          <div className="lg:col-span-1">
-            <div className="font-semibold mb-2">Signals Preview</div>
-            <button
-              className="h-10 px-3 rounded-md border border-border hover:bg-muted text-sm font-semibold"
-              onClick={refreshFeed}
-            >
-              Refresh feed
-            </button>
-            {feedError ? (
-              <div className="mt-3 text-sm text-red-400">{feedError}</div>
-            ) : feed ? (
-              <div className="mt-3 text-sm">
-                <div className="text-muted-foreground">
-                  Mode: <span className="font-semibold">{feed.mode}</span> · Tier: {feed.tier}
-                </div>
-                <div className="mt-2 space-y-2">
-                  {feed.signals.length === 0 ? (
-                    <div className="text-muted-foreground">No eligible signals (Observer has 24h delay).</div>
-                  ) : (
-                    feed.signals.map((s, i) => (
-                      <div key={s.id || i} className="rounded-md border border-border p-2">
-                        <div className="flex items-center justify-between">
-                          <div className="font-semibold">
-                            {s.symbol} · {s.side}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {s.ts ? new Date(s.ts * 1000).toISOString() : ""}
-                          </div>
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Conf: {typeof s.confidence === "number" ? s.confidence.toFixed(2) : "—"} ·{" "}
-                          {s.rationale || ""}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="mt-3 text-sm text-muted-foreground">Loading…</div>
-            )}
-          </div>
-        </div>
-      </div>
-
+      {/* Plan cards */}
       <div className="grid gap-4 lg:grid-cols-3">
         {plansError ? (
-          <div className="text-red-400">{plansError}</div>
+          <div className="text-red-400 col-span-3">{plansError}</div>
+        ) : plans.length === 0 ? (
+          <div className="text-muted-foreground col-span-3 text-sm">Loading plans...</div>
         ) : (
           plans.map((p) => (
             <PlanCard
@@ -359,8 +200,75 @@ export default function PlansPage() {
         )}
       </div>
 
+      {/* Dev tools */}
+      <details className="bt-panel">
+        <summary className="px-4 py-3 cursor-pointer text-sm font-semibold text-muted-foreground hover:text-foreground">
+          Dev Tools (Auth &amp; Tier Switching)
+        </summary>
+        <div className="px-4 pb-4 border-t border-border pt-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div>
+              <div className="font-semibold text-sm mb-2">Login / Register (Dev)</div>
+              <div className="space-y-2">
+                <input
+                  className="bt-input"
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+                <input
+                  className="bt-input"
+                  placeholder="Password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <button className="bt-button h-10 px-4" onClick={doRegister}>Register</button>
+                  <button className="bt-button h-10 px-4" onClick={doLogin}>Login</button>
+                  <button className="bt-button h-10 px-4" onClick={doLogout}>Logout</button>
+                </div>
+                {!!authMsg && <div className="text-sm">{authMsg}</div>}
+              </div>
+            </div>
+
+            <div>
+              <div className="font-semibold text-sm mb-2">Current Subscription</div>
+              {!token ? (
+                <div className="text-sm text-muted-foreground">
+                  Not logged in. Browsing as <span className="font-semibold">Free</span>.
+                </div>
+              ) : me ? (
+                <div className="text-sm space-y-1">
+                  <div>Tier: <span className="font-semibold">{me.tier.toUpperCase()}</span></div>
+                  <div>Status: <span className="font-semibold">{me.status}</span></div>
+                  <div className="text-xs text-muted-foreground">Updated: {me.updated_at}</div>
+                </div>
+              ) : meError ? (
+                <div className="text-sm text-red-400">{meError}</div>
+              ) : (
+                <div className="text-sm text-muted-foreground">Loading...</div>
+              )}
+
+              <div className="mt-4">
+                <div className="font-semibold text-sm mb-2">Dev Admin Key</div>
+                <input
+                  className="bt-input"
+                  placeholder="X-Admin-Key (LOCAL_DEV_API_KEY)"
+                  value={adminKey}
+                  onChange={(e) => saveAdminKey(e.target.value)}
+                />
+                <div className="text-xs text-muted-foreground mt-1">
+                  Used only to switch tiers locally.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+
       <div className="text-xs text-muted-foreground">
-        Note: "Alerts" and "payments" are not implemented in Step 1; this page verifies plan definitions and server-side gating.
+        {COMPLIANCE.NOT_INVESTMENT_ADVICE}
       </div>
     </div>
   );
@@ -374,22 +282,24 @@ function PlanCard({
 }: {
   plan: Plan;
   isCurrent: boolean;
-  onSelect: () => void;
+  onSelect: () => void | Promise<void>;
   canSelect: boolean;
 }) {
   const price = plan.price_usd_month === 0 ? "Free" : `$${plan.price_usd_month}/mo`;
+  const highlight = plan.tier === "standard";
+
   return (
-    <div className="rounded-lg border border-border bg-card p-4 flex flex-col">
+    <div className={`bt-panel p-4 flex flex-col ${highlight ? "ring-1 ring-[hsl(var(--risk-on))]/40" : ""}`}>
       <div className="flex items-start justify-between">
         <div>
           <div className="text-xl font-semibold">{plan.name}</div>
-          <div className="text-muted-foreground text-sm">{plan.target_user}</div>
+          <div className="text-muted-foreground text-sm mt-0.5">{plan.target_user}</div>
         </div>
-        <div className="text-lg font-bold">{price}</div>
+        <div className="text-lg font-bold font-mono">{price}</div>
       </div>
 
       <div className="mt-4">
-        <div className="text-sm font-semibold mb-2">Included</div>
+        <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Included</div>
         <ul className="text-sm text-muted-foreground space-y-1 list-disc pl-5">
           {plan.features.map((f, i) => (
             <li key={i}>{f}</li>
@@ -397,30 +307,29 @@ function PlanCard({
         </ul>
       </div>
 
-      <div className="mt-4">
-        <div className="text-sm font-semibold mb-2">Excluded</div>
-        <ul className="text-sm text-muted-foreground space-y-1 list-disc pl-5">
-          {plan.exclusions.map((f, i) => (
-            <li key={i}>{f}</li>
-          ))}
-        </ul>
-      </div>
+      {plan.exclusions.length > 0 && plan.exclusions[0] !== "None — full platform access" && (
+        <div className="mt-4">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">Not Included</div>
+          <ul className="text-sm text-muted-foreground space-y-1 list-disc pl-5">
+            {plan.exclusions.map((f, i) => (
+              <li key={i}>{f}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
-      <div className="mt-4 text-xs text-muted-foreground">
-        Limits: delay {plan.limits.signal_delay_seconds}s · max {plan.limits.max_signals_per_response} signals · history{" "}
-        {plan.limits.history_days} days
-      </div>
+      {plan.exclusions[0] === "None — full platform access" && (
+        <div className="mt-4 text-sm text-[hsl(var(--risk-on))] font-medium">Full platform access</div>
+      )}
 
       <div className="mt-4 flex-1" />
       <button
-        className={`h-11 rounded-md border border-border text-sm font-semibold hover:bg-muted ${
-          isCurrent ? "opacity-60 cursor-default" : ""
-        }`}
+        className={`bt-button h-11 w-full mt-4 ${isCurrent ? "opacity-60 cursor-default" : ""}`}
         onClick={onSelect}
         disabled={!canSelect || isCurrent}
         title={!canSelect ? "Login to enable dev tier switching" : isCurrent ? "Current plan" : ""}
       >
-        {isCurrent ? "Current Plan" : "Switch to this tier (Dev)"}
+        {isCurrent ? "Current Plan" : `Select ${plan.name}`}
       </button>
     </div>
   );

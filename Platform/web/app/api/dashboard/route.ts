@@ -8,8 +8,8 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     mode: "analysis_only",
-    tier,
-    market_regime: "NEUTRAL",
+    tier: tier,
+    regime: "NEUTRAL",
     timestamp: nowIso(),
     freshness_seconds: 10,
     data_live: true,

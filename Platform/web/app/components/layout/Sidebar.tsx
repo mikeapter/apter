@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "./NavItems";
+import { COMPLIANCE } from "../../lib/compliance";
 
 export function Sidebar({
   collapsed,
@@ -19,23 +20,11 @@ export function Sidebar({
     <aside
       className={[
         "h-full border-r bg-background",
-        collapsed ? "w-16" : "w-64",
+        collapsed ? "w-16" : "w-56",
         "transition-[width] duration-200 ease-in-out",
       ].join(" ")}
     >
-      <div className="h-14 px-3 flex items-center justify-between border-b">
-        <div className="flex items-center gap-2 overflow-hidden">
-          <div className="h-9 w-9 rounded-full border flex items-center justify-center font-bold">
-            BT
-          </div>
-          {!collapsed && (
-            <div className="leading-tight">
-              <div className="font-semibold">BotTrader</div>
-              <div className="text-xs text-muted-foreground">Control Plane</div>
-            </div>
-          )}
-        </div>
-
+      <div className="h-14 px-3 flex items-center justify-end border-b">
         <button
           type="button"
           className="h-9 w-9 rounded border flex items-center justify-center"
@@ -72,8 +61,7 @@ export function Sidebar({
       {!collapsed && (
         <div className="absolute bottom-4 left-3 right-3">
           <div className="border rounded p-3 text-xs text-muted-foreground">
-            <div className="font-semibold mb-1 text-foreground">Safety rule</div>
-            UI never trades. UI → API → Runtime → Bot.
+            {COMPLIANCE.NOT_INVESTMENT_ADVICE}
           </div>
         </div>
       )}
