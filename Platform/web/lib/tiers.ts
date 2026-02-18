@@ -1,8 +1,8 @@
-export type PlanTier = "observer" | "signals" | "pro";
+export type PlanTier = "free" | "standard" | "pro";
 
 const TIER_RANK: Record<string, number> = {
-  observer: 0,
-  signals: 1,
+  free: 0,
+  standard: 1,
   pro: 2,
 };
 

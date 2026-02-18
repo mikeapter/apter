@@ -11,7 +11,6 @@ export async function GET() {
     mode: "analysis_only",
     tier: "PRO",
     regime: "NEUTRAL",
-    market_regime: "NEUTRAL",
     timestamp: nowIso(),
     freshness_seconds: 10,
     data_live: true,

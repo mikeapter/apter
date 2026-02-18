@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { apiGet, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 
-type PlanTier = "observer" | "signals" | "pro";
+type PlanTier = "free" | "standard" | "pro";
 
 type Plan = {
   tier: PlanTier;
@@ -69,7 +69,7 @@ function PlansContent() {
     );
   }, [token]);
 
-  const currentTier: PlanTier = me?.tier ?? "observer";
+  const currentTier: PlanTier = me?.tier ?? "free";
 
   async function handleUpgrade(tier: PlanTier) {
     if (!token) return; // button should route to /register if no token
@@ -111,8 +111,7 @@ function PlansContent() {
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold">Subscription Plans</h1>
         <p className="text-muted-foreground">
-          Signals-only trading tool. No auto-execution. Plans control access to
-          signals, history, and analytics.
+          Choose the analytics tier that fits your research needs. All tiers include the institutional-quality dashboard.
         </p>
       </div>
 
@@ -137,7 +136,7 @@ function PlansContent() {
             {" \u00b7 "}
             Status: <span className="font-semibold">{me.status}</span>
           </div>
-          {me.tier !== "observer" && (
+          {me.tier !== "free" && (
             <button
               onClick={handleManage}
               className="bt-button hover:bg-muted text-sm"
