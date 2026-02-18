@@ -1,14 +1,28 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, X, Send } from "lucide-react";
-import { getAssistantResponse, type AssistantResponse } from "../../lib/assistantResponses";
+import { Sparkles, X, Send, Loader2 } from "lucide-react";
+import { authPost } from "@/lib/fetchWithAuth";
 import { COMPLIANCE } from "../../lib/compliance";
+
+type AssistantResponse = {
+  dataShows: string;
+  whyItMatters: string;
+  reviewNext: string[];
+};
 
 type Message = {
   role: "user" | "assistant";
   content: string;
   structured?: AssistantResponse;
+  loading?: boolean;
+};
+
+type ChatAPIResponse = {
+  intent: string;
+  ticker: string | null;
+  response: AssistantResponse;
+  timestamp: string;
 };
 
 function AssistantMessage({ msg }: { msg: Message }) {
@@ -17,6 +31,17 @@ function AssistantMessage({ msg }: { msg: Message }) {
       <div className="flex justify-end">
         <div className="max-w-[85%] rounded-md bg-panel-2 border border-border px-3 py-2 text-sm">
           {msg.content}
+        </div>
+      </div>
+    );
+  }
+
+  if (msg.loading) {
+    return (
+      <div className="flex justify-start">
+        <div className="rounded-md bg-panel border border-border px-3 py-2 flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 size={14} className="animate-spin" />
+          Analyzing...
         </div>
       </div>
     );
@@ -61,27 +86,44 @@ export function ApterAssistant() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
-    if (!text) return;
+    if (!text || sending) return;
 
     const userMsg: Message = { role: "user", content: text };
-    const response = getAssistantResponse(text);
-    const assistantMsg: Message = {
-      role: "assistant",
-      content: "",
-      structured: response,
-    };
+    const loadingMsg: Message = { role: "assistant", content: "", loading: true };
 
-    setMessages((prev) => [...prev, userMsg, assistantMsg]);
+    setMessages((prev) => [...prev, userMsg, loadingMsg]);
     setInput("");
+    setSending(true);
+
+    // Call backend chat endpoint
+    const res = await authPost<ChatAPIResponse>("/api/chat", { message: text });
+
+    setMessages((prev) => {
+      const updated = prev.filter((m) => !m.loading);
+      if (res.ok && res.data.response) {
+        return [...updated, {
+          role: "assistant" as const,
+          content: "",
+          structured: res.data.response,
+        }];
+      }
+      return [...updated, {
+        role: "assistant" as const,
+        content: res.ok ? "Response received." : (res.error || "Something went wrong. Please try again."),
+      }];
+    });
+
+    setSending(false);
   }
 
   if (!open) {
@@ -89,7 +131,7 @@ export function ApterAssistant() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-16 right-6 z-40 h-12 w-12 rounded-full border border-border bg-panel shadow-lg flex items-center justify-center hover:bg-muted transition-colors"
+        className="fixed bottom-20 lg:bottom-16 right-4 lg:right-6 z-40 h-12 w-12 rounded-full border border-border bg-panel shadow-lg flex items-center justify-center hover:bg-muted transition-colors"
         title="Open Apter Assistant"
       >
         <Sparkles size={20} />
@@ -98,7 +140,7 @@ export function ApterAssistant() {
   }
 
   return (
-    <div className="fixed bottom-16 right-6 z-40 w-96 max-h-[70vh] rounded-md border border-border bg-card shadow-xl flex flex-col">
+    <div className="fixed bottom-20 lg:bottom-16 right-4 lg:right-6 z-40 w-[calc(100%-2rem)] sm:w-96 max-h-[70vh] rounded-md border border-border bg-card shadow-xl flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-panel">
         <div className="flex items-center gap-2">
@@ -140,13 +182,15 @@ export function ApterAssistant() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask a question..."
-          className="flex-1 h-8 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+          className="flex-1 h-9 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+          disabled={sending}
         />
         <button
           type="submit"
-          className="h-8 w-8 rounded-md border border-border flex items-center justify-center hover:bg-muted"
+          disabled={sending}
+          className="h-9 w-9 rounded-md border border-border flex items-center justify-center hover:bg-muted"
         >
-          <Send size={14} />
+          {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
         </button>
       </form>
     </div>

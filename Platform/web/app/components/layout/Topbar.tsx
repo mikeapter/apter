@@ -2,23 +2,16 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, User, Settings, CreditCard, LogOut } from "lucide-react";
+import { Search, User, Settings, CreditCard, LogOut, ChevronDown } from "lucide-react";
 import { COMPLIANCE } from "../../lib/compliance";
+import { useAuth } from "../../hooks/useAuth";
 
 function DisclosureBanner() {
   return (
-    <div className="w-full border-b border-border bg-panel-2 px-4 py-2">
-      <p className="text-[11px] md:text-xs text-muted-foreground tracking-[0.01em]">
+    <div className="w-full border-b border-border bg-panel-2 px-4 py-1.5">
+      <p className="text-[10px] md:text-[11px] text-muted-foreground tracking-[0.01em] leading-relaxed">
         {COMPLIANCE.DISCLOSURE_BANNER}
       </p>
-    </div>
-  );
-}
-
-function BrandMark() {
-  return (
-    <div className="h-8 w-8 rounded-full border border-border flex items-center justify-center">
-      <span className="text-[12px] font-semibold tracking-[0.06em]">A</span>
     </div>
   );
 }
@@ -51,6 +44,7 @@ function StockSearch() {
 }
 
 function UserMenu() {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -64,23 +58,35 @@ function UserMenu() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  const displayName = user?.email?.split("@")[0] || "User";
+
   return (
     <div ref={ref} className="relative">
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="h-9 w-9 rounded-full border border-border flex items-center justify-center hover:bg-muted"
+        className="flex items-center gap-2 h-9 px-2 rounded-md border border-border hover:bg-muted/60 transition-colors"
         aria-label="User menu"
       >
-        <User size={16} />
+        <div className="h-7 w-7 rounded-full border border-border bg-panel-2 flex items-center justify-center">
+          <User size={14} />
+        </div>
+        <span className="hidden sm:block text-xs text-muted-foreground max-w-[120px] truncate">
+          {displayName}
+        </span>
+        <ChevronDown size={12} className="text-muted-foreground" />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-48 rounded-md border border-border bg-card shadow-lg z-50">
+        <div className="absolute right-0 top-full mt-1 w-52 rounded-md border border-border bg-card shadow-lg z-50">
+          <div className="px-3 py-2 border-b border-border">
+            <div className="text-xs font-medium truncate">{displayName}</div>
+            <div className="text-[10px] text-muted-foreground truncate">{user?.email}</div>
+          </div>
           <nav className="py-1">
             <a
               href="/profile"
-              className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted"
+              className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
               onClick={() => setOpen(false)}
             >
               <User size={14} />
@@ -88,7 +94,7 @@ function UserMenu() {
             </a>
             <a
               href="/settings"
-              className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted"
+              className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
               onClick={() => setOpen(false)}
             >
               <Settings size={14} />
@@ -96,7 +102,7 @@ function UserMenu() {
             </a>
             <a
               href="/plans"
-              className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted"
+              className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
               onClick={() => setOpen(false)}
             >
               <CreditCard size={14} />
@@ -105,7 +111,7 @@ function UserMenu() {
             <div className="border-t border-border my-1" />
             <a
               href="/logout"
-              className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-risk-off"
+              className="flex items-center gap-2 px-3 py-2 text-sm text-risk-off hover:bg-muted/40 transition-colors"
               onClick={() => setOpen(false)}
             >
               <LogOut size={14} />
@@ -119,28 +125,32 @@ function UserMenu() {
 }
 
 export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
+  const { user } = useAuth();
+  const firstName = user?.email?.split("@")[0] || "there";
+
   return (
     <>
       <DisclosureBanner />
 
       <header className="h-14 border-b border-border bg-panel px-4 flex items-center justify-between gap-3">
-        {/* Left: mobile menu + logo */}
+        {/* Left: mobile menu + welcome */}
         <div className="flex items-center gap-3 min-w-[180px]">
           <button
             type="button"
-            className="md:hidden h-9 w-9 rounded border border-border flex items-center justify-center"
+            className="lg:hidden h-9 w-9 rounded-md border border-border flex items-center justify-center hover:bg-muted/60"
             onClick={onOpenMobile}
             aria-label="Open menu"
           >
-            ☰
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <line x1="2" y1="4" x2="14" y2="4" />
+              <line x1="2" y1="8" x2="14" y2="8" />
+              <line x1="2" y1="12" x2="14" y2="12" />
+            </svg>
           </button>
 
-          <div className="flex items-center gap-2">
-            <BrandMark />
-            <div className="leading-tight">
-              <div className="text-xs text-muted-foreground tracking-[0.12em]">APTER</div>
-              <div className="text-[12px] font-semibold tracking-tight">Financial</div>
-            </div>
+          <div className="hidden md:block">
+            <span className="text-sm text-muted-foreground">Welcome back, </span>
+            <span className="text-sm font-medium">{firstName}</span>
           </div>
         </div>
 
