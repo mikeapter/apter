@@ -1,0 +1,168 @@
+# Apter Conviction Score — Configuration
+# Model version: apter_conviction_v1.0
+
+model_version: "apter_conviction_v1.0"
+
+# ─── Pillar weights (must sum to 1.0) ───
+pillar_weights:
+  quality: 0.25
+  value: 0.20
+  growth: 0.20
+  momentum: 0.20
+  risk: 0.15
+
+# ─── Quality pillar metric weights ───
+quality_metrics:
+  roe:
+    weight: 0.25
+    higher_is_better: true
+  roic:
+    weight: 0.20
+    higher_is_better: true
+  gross_margin:
+    weight: 0.15
+    higher_is_better: true
+  operating_margin:
+    weight: 0.15
+    higher_is_better: true
+  fcf_margin:
+    weight: 0.15
+    higher_is_better: true
+  asset_turnover:
+    weight: 0.10
+    higher_is_better: true
+
+# ─── Value pillar metric weights ───
+value_metrics:
+  pe_ratio:
+    weight: 0.25
+    higher_is_better: false
+  pb_ratio:
+    weight: 0.15
+    higher_is_better: false
+  ps_ratio:
+    weight: 0.15
+    higher_is_better: false
+  ev_ebitda:
+    weight: 0.20
+    higher_is_better: false
+  fcf_yield:
+    weight: 0.25
+    higher_is_better: true
+
+# ─── Growth pillar metric weights ───
+growth_metrics:
+  revenue_growth_yoy:
+    weight: 0.25
+    higher_is_better: true
+  earnings_growth_yoy:
+    weight: 0.25
+    higher_is_better: true
+  fcf_growth_yoy:
+    weight: 0.20
+    higher_is_better: true
+  revenue_growth_3y_cagr:
+    weight: 0.15
+    higher_is_better: true
+  earnings_growth_3y_cagr:
+    weight: 0.15
+    higher_is_better: true
+
+# ─── Momentum / Trend pillar metric weights ───
+momentum_metrics:
+  price_vs_sma50:
+    weight: 0.20
+    higher_is_better: true
+  price_vs_sma200:
+    weight: 0.20
+    higher_is_better: true
+  rsi_14:
+    weight: 0.15
+    higher_is_better: true          # mapped via bell-curve (50-70 best)
+    optimal_range: [50, 70]
+  return_1m:
+    weight: 0.15
+    higher_is_better: true
+  return_3m:
+    weight: 0.15
+    higher_is_better: true
+  return_6m:
+    weight: 0.15
+    higher_is_better: true
+
+# ─── Risk pillar metric weights ───
+risk_metrics:
+  volatility_30d:
+    weight: 0.20
+    higher_is_better: false
+  max_drawdown_1y:
+    weight: 0.20
+    higher_is_better: false         # less negative is better
+  debt_to_equity:
+    weight: 0.15
+    higher_is_better: false
+  interest_coverage:
+    weight: 0.15
+    higher_is_better: true
+  current_ratio:
+    weight: 0.15
+    higher_is_better: true
+  beta:
+    weight: 0.15
+    higher_is_better: false
+
+# ─── Risk Gates / Caps (applied AFTER composite) ───
+risk_gates:
+  leverage_cap:
+    enabled: true
+    description: "Extreme leverage or dangerously low interest coverage"
+    conditions:
+      debt_to_equity_threshold: 5.0
+      interest_coverage_threshold: 1.5    # below this is dangerous
+    cap_value: 7.4
+
+  negative_fcf_penalty:
+    enabled: true
+    description: "Persistent negative FCF combined with high dilution"
+    conditions:
+      consecutive_negative_fcf_quarters: 4
+      dilution_pct_threshold: 5.0        # >5% annual share dilution
+    penalty_range: [0.5, 1.5]            # subtracted from overall
+
+  volatility_penalty:
+    enabled: true
+    description: "Extreme volatility or drawdown"
+    conditions:
+      volatility_30d_threshold: 60.0     # annualized %
+      max_drawdown_threshold: -40.0      # %
+    penalty_range: [0.5, 2.0]
+
+# ─── Score bands ───
+bands:
+  bearish:
+    min: 0.0
+    max: 3.9
+    label: "Bearish"
+    color: "red"
+  neutral:
+    min: 4.0
+    max: 7.9
+    label: "Neutral"
+    color: "yellow"
+  bullish:
+    min: 8.0
+    max: 10.0
+    label: "Bullish"
+    color: "green"
+
+# ─── Winsorization ───
+winsorization:
+  lower_percentile: 2.0
+  upper_percentile: 98.0
+
+# ─── Confidence ───
+confidence:
+  full_data_score: 100
+  missing_metric_penalty: 5           # per missing metric
+  no_peer_group_penalty: 10           # market-wide fallback
+  min_confidence: 20

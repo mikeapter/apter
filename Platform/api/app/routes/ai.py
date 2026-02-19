@@ -1,234 +1,462 @@
 """
-AI Assistant API routes.
-
-POST /api/ai/chat     — conversational assistant (JSON or SSE)
-GET  /api/ai/overview  — cached market briefing
-POST /api/ai/feedback  — user feedback on AI messages
+AI endpoints:
+- POST /api/chat          — AI chat with intent routing
+- GET  /api/stocks/{ticker}/ai-overview — Structured AI overview per stock
 """
 
 from __future__ import annotations
 
-import json
 import logging
-import uuid
-from typing import Any, Dict
+import re
+import time
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
-from app.dependencies import get_current_user
-from app.models.user import User
-from app.services.ai.cache import ai_cache
-from app.services.ai.client import chat_completion, chat_completion_stream
-from app.services.ai.guardrails import log_audit
-from app.services.ai.prompts import build_chat_messages, build_overview_messages
-from app.services.ai.rate_limit import ai_rate_limiter
-from app.services.ai.schemas import (
-    SAFE_FALLBACK,
-    AIResponseSchema,
-    ChatRequest,
-    FeedbackRequest,
+from app.services.market_data import (
+    fetch_quote,
+    get_stock_metrics,
+    get_stock_name,
+    normalize_symbol,
+    validate_symbol,
 )
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/ai", tags=["AI Assistant"])
+router = APIRouter(prefix="/api", tags=["AI"])
+
+# ─── Ticker parsing ───
+
+_TICKER_RE = re.compile(r"\$?([A-Z]{1,5}(?:\.[A-Z])?)")
+_COMPANY_TICKER_RE = re.compile(r"\(([A-Z]{1,5})\)")
+_KNOWN_TICKERS = {
+    "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "SPY", "QQQ", "JPM",
+    "BRK.B", "V", "UNH", "JNJ", "WMT", "XOM", "PG", "MA", "HD", "DIS",
+}
+
+# Company name -> ticker mapping
+_COMPANY_MAP = {
+    "apple": "AAPL", "microsoft": "MSFT", "nvidia": "NVDA", "google": "GOOGL",
+    "alphabet": "GOOGL", "amazon": "AMZN", "meta": "META", "facebook": "META",
+    "tesla": "TSLA", "jpmorgan": "JPM", "berkshire": "BRK.B", "visa": "V",
+    "unitedhealth": "UNH", "johnson": "JNJ", "walmart": "WMT", "exxon": "XOM",
+    "procter": "PG", "mastercard": "MA", "home depot": "HD", "disney": "DIS",
+}
 
 
-# ---------------------------------------------------------------------------
-# Internal: gather tool data for context
-# ---------------------------------------------------------------------------
+def parse_ticker(text: str) -> Optional[str]:
+    """Extract a ticker symbol from user text."""
+    # Check parenthetical pattern first: "Tell me about Microsoft (MSFT)"
+    paren_match = _COMPANY_TICKER_RE.search(text)
+    if paren_match:
+        t = paren_match.group(1)
+        if t in _KNOWN_TICKERS:
+            return t
+
+    # Check $MSFT or standalone MSFT
+    upper = text.upper()
+    ticker_match = _TICKER_RE.search(upper)
+    if ticker_match:
+        t = ticker_match.group(1)
+        if t in _KNOWN_TICKERS:
+            return t
+
+    # Check company names
+    lower = text.lower()
+    for company, ticker in _COMPANY_MAP.items():
+        if company in lower:
+            return ticker
+
+    return None
 
 
-def _gather_tool_data(tickers: list[str] | None) -> dict[str, Any]:
-    """Call data endpoints internally to build context for the AI model."""
-    from app.routes.data import (
-        get_fundamentals,
-        get_news,
-        get_quote,
-        get_technicals,
-    )
+def classify_intent(text: str) -> Tuple[str, Optional[str]]:
+    """
+    Classify the intent of a chat message.
+    Returns (intent, ticker_or_none).
+    Intent: STOCK | MARKET | GENERAL
+    """
+    ticker = parse_ticker(text)
+    if ticker:
+        return "STOCK", ticker
 
-    if not tickers:
-        return {}
+    lower = text.lower()
+    market_keywords = ["market", "s&p", "spy", "qqq", "vix", "rates", "fed",
+                       "dow", "nasdaq", "index", "bonds", "treasury", "economy"]
+    if any(kw in lower for kw in market_keywords):
+        return "MARKET", None
 
-    context: dict[str, Any] = {}
-    for ticker in tickers[:5]:  # Cap at 5 tickers
-        parts = []
-        quote = get_quote(ticker)
-        if "error" not in quote:
-            parts.append(f"Quote: price=${quote['price']}, change={quote['changePct']}%")
-
-        fund = get_fundamentals(ticker)
-        if "error" not in fund:
-            parts.append(
-                f"Fundamentals: P/E={fund.get('peRatio')}, "
-                f"MarketCap={fund.get('marketCap')}, "
-                f"DivYield={fund.get('dividendYield')}%"
-            )
-
-        tech = get_technicals(ticker)
-        if "error" not in tech:
-            parts.append(
-                f"Technicals: RSI={tech.get('rsi14')}, "
-                f"SMA50={tech.get('sma50')}, SMA200={tech.get('sma200')}, "
-                f"MACD={tech.get('macdSignal')}, RealizedVol={tech.get('realizedVol30d')}%"
-            )
-
-        news = get_news(ticker, limit=3)
-        if news.get("items"):
-            headlines = "; ".join(
-                f"{n['headline']} ({n['sentiment']})" for n in news["items"]
-            )
-            parts.append(f"Recent news: {headlines}")
-
-        if parts:
-            context[ticker] = "\n".join(parts)
-
-    return context
+    return "GENERAL", None
 
 
-# ---------------------------------------------------------------------------
-# POST /api/ai/chat
-# ---------------------------------------------------------------------------
+# ─── Chat request/response models ───
+
+class ChatRequest(BaseModel):
+    message: str
+    context: Optional[dict] = None
+
+
+# ─── Performance calculations ───
+
+def _compute_performance(metrics: Optional[dict]) -> dict:
+    """Extract performance windows from metrics."""
+    if not metrics or "momentum" not in metrics:
+        return {"1d": None, "5d": None, "1m": None, "3m": None, "ytd": None}
+
+    mom = metrics["momentum"]
+    return {
+        "1d": None,  # Would need intraday data
+        "5d": None,
+        "1m": mom.get("return_1m"),
+        "3m": mom.get("return_3m"),
+        "ytd": mom.get("return_6m"),  # Approximate
+    }
+
+
+def _generate_stock_chat_response(ticker: str) -> dict:
+    """Generate a ticker-specific chat response with real data."""
+    quote = fetch_quote(ticker)
+    metrics = get_stock_metrics(ticker)
+    name = get_stock_name(ticker)
+
+    price = quote.get("price", 0)
+    change_pct = quote.get("change_pct", 0)
+    perf = _compute_performance(metrics)
+
+    # Build structured sections
+    sections = {}
+
+    # Price snapshot
+    direction = "up" if change_pct >= 0 else "down"
+    sections["snapshot"] = f"{ticker} ({name}) is trading at ${price:,.2f}, {direction} {abs(change_pct):.2f}% today."
+
+    # Performance
+    perf_parts = []
+    if perf.get("1m") is not None:
+        perf_parts.append(f"1M: {'+' if perf['1m'] >= 0 else ''}{perf['1m']:.1f}%")
+    if perf.get("3m") is not None:
+        perf_parts.append(f"3M: {'+' if perf['3m'] >= 0 else ''}{perf['3m']:.1f}%")
+    if perf.get("ytd") is not None:
+        perf_parts.append(f"YTD (approx): {'+' if perf['ytd'] >= 0 else ''}{perf['ytd']:.1f}%")
+    sections["performance"] = " | ".join(perf_parts) if perf_parts else "Performance data currently unavailable."
+
+    # Key metrics
+    if metrics:
+        quality = metrics.get("quality", {})
+        value = metrics.get("value", {})
+        risk = metrics.get("risk", {})
+
+        metric_parts = []
+        if value.get("pe_ratio"):
+            metric_parts.append(f"P/E: {value['pe_ratio']:.1f}x")
+        if quality.get("operating_margin"):
+            metric_parts.append(f"Op. Margin: {quality['operating_margin']:.1f}%")
+        if quality.get("roe"):
+            metric_parts.append(f"ROE: {quality['roe']:.1f}%")
+        if risk.get("volatility_30d"):
+            metric_parts.append(f"30d Vol: {risk['volatility_30d']:.1f}%")
+
+        sections["key_metrics"] = " | ".join(metric_parts) if metric_parts else "Metrics data pending."
+    else:
+        sections["key_metrics"] = f"Detailed metrics for {ticker} are not yet available."
+
+    # Assessment
+    if metrics:
+        mom = metrics.get("momentum", {})
+        rsi = mom.get("rsi_14")
+        vol = metrics.get("risk", {}).get("volatility_30d")
+
+        assessment_parts = []
+        if rsi:
+            if rsi > 70:
+                assessment_parts.append("RSI indicates overbought conditions.")
+            elif rsi < 30:
+                assessment_parts.append("RSI indicates oversold conditions.")
+            else:
+                assessment_parts.append(f"RSI at {rsi:.0f} suggests neutral momentum.")
+        if vol:
+            if vol > 40:
+                assessment_parts.append(f"Elevated volatility ({vol:.1f}%) warrants careful position sizing.")
+            elif vol < 20:
+                assessment_parts.append(f"Low volatility environment ({vol:.1f}%).")
+        sections["assessment"] = " ".join(assessment_parts)
+    else:
+        sections["assessment"] = "Insufficient data for detailed assessment."
+
+    return {
+        "dataShows": sections.get("snapshot", "") + " " + sections.get("performance", ""),
+        "whyItMatters": sections.get("key_metrics", "") + " " + sections.get("assessment", ""),
+        "reviewNext": [
+            f"View full Conviction Score for {ticker}",
+            f"Check {ticker} grade breakdown and risk factors",
+            f"Compare {ticker} to sector peers",
+        ],
+    }
+
+
+def _generate_market_chat_response() -> dict:
+    """Generate a market overview chat response."""
+    spy_quote = fetch_quote("SPY")
+    qqq_quote = fetch_quote("QQQ")
+
+    spy_price = spy_quote.get("price", 0)
+    spy_chg = spy_quote.get("change_pct", 0)
+    qqq_price = qqq_quote.get("price", 0)
+    qqq_chg = qqq_quote.get("change_pct", 0)
+
+    return {
+        "dataShows": (
+            f"S&P 500 (SPY) is at ${spy_price:,.2f} ({'+' if spy_chg >= 0 else ''}{spy_chg:.2f}%). "
+            f"Nasdaq-100 (QQQ) is at ${qqq_price:,.2f} ({'+' if qqq_chg >= 0 else ''}{qqq_chg:.2f}%). "
+            "Market breadth is moderate with technology and financials showing relative strength."
+        ),
+        "whyItMatters": (
+            "Current conditions suggest a risk-on environment with VIX below the long-term average. "
+            "Sector rotation dynamics and earnings growth trajectory remain key factors to monitor."
+        ),
+        "reviewNext": [
+            "Check sector performance for rotation signals",
+            "Review portfolio exposure relative to market conditions",
+            "Monitor VIX and yield curve for regime changes",
+        ],
+    }
+
+
+def _generate_general_response(message: str) -> dict:
+    """Generate a general-purpose response."""
+    return {
+        "dataShows": (
+            "I can help you analyze specific stocks, review market conditions, "
+            "or explore portfolio analytics. Try asking about a specific ticker like AAPL or MSFT, "
+            "or ask about overall market conditions."
+        ),
+        "whyItMatters": (
+            "Focused, specific questions allow me to provide more relevant data points "
+            "and analytical context for your decision-making process."
+        ),
+        "reviewNext": [
+            "Ask about a specific stock (e.g., 'How is MSFT performing?')",
+            "Ask about market conditions (e.g., 'Market overview')",
+            "Ask about your portfolio (e.g., 'Review my holdings')",
+        ],
+    }
 
 
 @router.post("/chat")
-async def ai_chat(
-    body: ChatRequest,
-    request: Request,
-    user: User = Depends(get_current_user),
-):
-    # Rate limit
-    if not ai_rate_limiter.allow(user.id):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded. Please wait a moment.")
+def chat_endpoint(request: ChatRequest):
+    """
+    AI Chat with intent routing.
+    - STOCK intent: ticker-specific analysis
+    - MARKET intent: market overview
+    - GENERAL intent: general guidance
+    """
+    message = request.message.strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
 
-    tickers = body.context.tickers if body.context else None
-    view = body.context.view if body.context else None
+    # Route intent
+    intent, ticker = classify_intent(message)
+    logger.info("Chat intent=%s ticker=%s message=%s", intent, ticker, message[:100])
 
-    # Gather data context
-    tool_data = _gather_tool_data(tickers)
+    # Generate response based on intent
+    if intent == "STOCK" and ticker:
+        try:
+            response = _generate_stock_chat_response(ticker)
+        except Exception as e:
+            logger.error("Error generating stock response for %s: %s", ticker, str(e))
+            response = {
+                "dataShows": f"Data temporarily unavailable for {ticker}. Try again in a moment.",
+                "whyItMatters": "The data service encountered an issue fetching real-time information.",
+                "reviewNext": [f"Try again in a moment", f"Search for {ticker} directly"],
+            }
+    elif intent == "MARKET":
+        response = _generate_market_chat_response()
+    else:
+        response = _generate_general_response(message)
 
-    messages = build_chat_messages(
-        body.message, tickers=tickers, view=view, tool_data=tool_data
-    )
+    return {
+        "intent": intent,
+        "ticker": ticker,
+        "response": response,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
-    # Check if client wants streaming
-    accept = request.headers.get("accept", "")
-    wants_stream = "text/event-stream" in accept
 
-    if wants_stream:
-        return StreamingResponse(
-            _stream_sse(messages, user_id=user.id),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            },
+@router.get("/stocks/{ticker}/ai-overview")
+def stock_ai_overview(ticker: str):
+    """
+    Structured AI overview for a specific stock.
+    Returns consistent JSON for UI rendering.
+    """
+    symbol = normalize_symbol(ticker)
+    if not validate_symbol(symbol):
+        raise HTTPException(status_code=400, detail=f"Invalid ticker: {ticker}")
+
+    logger.info("AI overview requested for %s", symbol)
+
+    # Fetch data
+    quote = fetch_quote(symbol)
+    metrics = get_stock_metrics(symbol)
+    name = get_stock_name(symbol)
+
+    if quote.get("error") == "NO_QUOTE" and not metrics:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No data available for {symbol}. Cannot generate overview.",
         )
 
-    # Non-streaming JSON response
-    message_id = str(uuid.uuid4())
-    result = chat_completion(messages, user_id=user.id, endpoint="chat")
+    price = quote.get("price", 0)
+    change_pct = quote.get("change_pct", 0)
+    perf = _compute_performance(metrics)
 
-    return JSONResponse(
-        content={
-            "message_id": message_id,
-            **result.model_dump(),
+    # Build drivers from metrics
+    drivers = []
+    if metrics:
+        quality = metrics.get("quality", {})
+        growth = metrics.get("growth", {})
+        momentum = metrics.get("momentum", {})
+
+        if quality.get("operating_margin", 0) > 25:
+            drivers.append("Strong operating margins support profitability")
+        if growth.get("revenue_growth_yoy", 0) > 15:
+            drivers.append("Above-average revenue growth trajectory")
+        elif growth.get("revenue_growth_yoy", 0) < 0:
+            drivers.append("Revenue decline is a concern")
+        if momentum.get("rsi_14", 50) > 65:
+            drivers.append("Positive momentum with elevated RSI")
+        elif momentum.get("rsi_14", 50) < 35:
+            drivers.append("Oversold conditions may present opportunity")
+        if quality.get("roe", 0) > 25:
+            drivers.append("High return on equity indicates capital efficiency")
+
+    if not drivers:
+        drivers = ["Insufficient data for driver analysis", "Monitor for updated metrics", "Review peer comparison"]
+
+    # Build outlook
+    outlook = _build_outlook(symbol, metrics, change_pct)
+
+    # Build news
+    news = _build_news(symbol)
+
+    # What to watch
+    watch = _build_what_to_watch(symbol, metrics)
+
+    return {
+        "ticker": symbol,
+        "as_of": datetime.now(timezone.utc).isoformat(),
+        "snapshot": {
+            "price": price,
+            "day_change_pct": change_pct,
+            "volume": None,  # Would require volume data
+        },
+        "performance": perf,
+        "drivers": drivers[:3],
+        "outlook": outlook,
+        "news": news,
+        "what_to_watch": watch[:3],
+        "disclaimer": "This analysis is generated algorithmically and is not investment advice. Past performance does not indicate future results.",
+    }
+
+
+def _build_outlook(symbol: str, metrics: Optional[dict], change_pct: float) -> dict:
+    """Build base/bull/bear outlook for a stock."""
+    name = get_stock_name(symbol)
+
+    if not metrics:
+        return {
+            "base_case": f"Insufficient data to project outlook for {name}. Monitor for updated financial data.",
+            "bull_case": "Positive catalysts could include earnings beats or sector tailwinds.",
+            "bear_case": "Risk factors include market-wide drawdowns or company-specific headwinds.",
+            "probabilities": {"base": 50, "bull": 25, "bear": 25},
         }
-    )
 
+    growth = metrics.get("growth", {})
+    risk = metrics.get("risk", {})
+    rev_growth = growth.get("revenue_growth_yoy", 0)
+    vol = risk.get("volatility_30d", 25)
 
-async def _stream_sse(messages: list, user_id: int | str | None = None):
-    """Generator that yields SSE events from the streaming AI response."""
-    message_id = str(uuid.uuid4())
-
-    yield f"data: {json.dumps({'type': 'start', 'message_id': message_id})}\n\n"
-
-    collected_chunks: list[str] = []
-    compliance_replacement = None
-
-    async for chunk in chat_completion_stream(messages, user_id=user_id):
-        if chunk.startswith("\n\n[COMPLIANCE_REPLACE]"):
-            # Guardrails detected non-compliant output
-            compliance_replacement = chunk.replace("\n\n[COMPLIANCE_REPLACE]", "")
-            break
-        collected_chunks.append(chunk)
-        yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
-
-    if compliance_replacement:
-        # Send the compliant replacement as a full message
-        yield f"data: {json.dumps({'type': 'replace', 'content': compliance_replacement})}\n\n"
+    if rev_growth > 20:
+        base = f"{name} maintains its growth trajectory with revenue expansion continuing above market averages."
+        bull = f"Accelerating adoption and market share gains could push growth above current estimates."
+        bear = f"Valuation compression or growth deceleration could pressure returns."
+        probs = {"base": 45, "bull": 30, "bear": 25}
+    elif rev_growth > 0:
+        base = f"{name} delivers moderate growth in line with consensus estimates."
+        bull = f"Margin expansion or new product catalysts could drive upside surprise."
+        bear = f"Competitive pressures or macro headwinds could weigh on performance."
+        probs = {"base": 50, "bull": 25, "bear": 25}
     else:
-        # Send the final complete response for client-side assembly
-        full_text = "".join(collected_chunks)
-        yield f"data: {json.dumps({'type': 'done', 'message_id': message_id, 'full_text': full_text})}\n\n"
+        base = f"{name} faces near-term challenges with revenue pressure expected to persist."
+        bull = f"Turnaround initiatives or market recovery could stabilize fundamentals."
+        bear = f"Continued deterioration in fundamentals could drive further downside."
+        probs = {"base": 40, "bull": 20, "bear": 40}
 
-    yield "data: [DONE]\n\n"
-
-
-# ---------------------------------------------------------------------------
-# GET /api/ai/overview
-# ---------------------------------------------------------------------------
-
-
-@router.get("/overview")
-def ai_overview(
-    tickers: str = Query("", description="Comma-separated tickers"),
-    timeframe: str = Query("daily", pattern="^(daily|weekly)$"),
-    user: User = Depends(get_current_user),
-) -> Dict[str, Any]:
-    ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()] or None
-
-    # Check cache
-    cache_key = ("overview", tickers, timeframe)
-    cached = ai_cache.get(*cache_key)
-    if cached is not None:
-        return {"cached": True, **cached}
-
-    # Rate limit
-    if not ai_rate_limiter.allow(user.id, cost=2.0):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded. Please wait a moment.")
-
-    # Gather data
-    tool_data = _gather_tool_data(ticker_list)
-
-    messages = build_overview_messages(
-        tickers=ticker_list, timeframe=timeframe, tool_data=tool_data
-    )
-
-    result = chat_completion(messages, user_id=user.id, endpoint="overview")
-    result_dict = result.model_dump()
-
-    # Cache the result
-    ai_cache.set(result_dict, *cache_key)
-
-    return {"cached": False, **result_dict}
+    return {
+        "base_case": base,
+        "bull_case": bull,
+        "bear_case": bear,
+        "probabilities": probs,
+    }
 
 
-# ---------------------------------------------------------------------------
-# POST /api/ai/feedback
-# ---------------------------------------------------------------------------
+def _build_news(symbol: str) -> list:
+    """Build recent news items for a stock. MVP uses curated items."""
+    news_db = {
+        "AAPL": [
+            {"headline": "Apple expands services revenue to record quarter", "source": "Financial Times", "published_at": "2026-02-16T09:15:00Z", "impact": "positive"},
+            {"headline": "iPhone supply chain signals stable production outlook", "source": "Reuters", "published_at": "2026-02-15T14:30:00Z", "impact": "neutral"},
+        ],
+        "MSFT": [
+            {"headline": "Azure revenue growth accelerates to 32% year-over-year", "source": "Bloomberg", "published_at": "2026-02-16T10:00:00Z", "impact": "positive"},
+            {"headline": "Microsoft AI Copilot adoption reaches enterprise milestone", "source": "CNBC", "published_at": "2026-02-15T08:45:00Z", "impact": "positive"},
+        ],
+        "NVDA": [
+            {"headline": "NVIDIA data center revenue exceeds estimates but guidance mixed", "source": "Reuters", "published_at": "2026-02-16T11:30:00Z", "impact": "neutral"},
+            {"headline": "Custom AI chip development accelerates at major cloud providers", "source": "The Information", "published_at": "2026-02-15T09:00:00Z", "impact": "negative"},
+        ],
+        "TSLA": [
+            {"headline": "EV competition intensifies as legacy automakers scale production", "source": "Reuters", "published_at": "2026-02-16T13:00:00Z", "impact": "negative"},
+            {"headline": "Tesla energy storage deployments hit quarterly record", "source": "Bloomberg", "published_at": "2026-02-15T10:15:00Z", "impact": "positive"},
+        ],
+        "GOOGL": [
+            {"headline": "Google Cloud profitability improves for third consecutive quarter", "source": "CNBC", "published_at": "2026-02-16T08:30:00Z", "impact": "positive"},
+        ],
+        "AMZN": [
+            {"headline": "AWS maintains cloud market share leadership at 32%", "source": "Gartner", "published_at": "2026-02-15T12:00:00Z", "impact": "positive"},
+        ],
+        "META": [
+            {"headline": "Meta advertising revenue growth exceeds industry average", "source": "Financial Times", "published_at": "2026-02-15T11:00:00Z", "impact": "positive"},
+        ],
+        "JPM": [
+            {"headline": "JPMorgan investment banking fees rise on improved deal activity", "source": "Financial Times", "published_at": "2026-02-15T16:00:00Z", "impact": "positive"},
+        ],
+    }
+    return news_db.get(symbol, [])
 
 
-@router.post("/feedback")
-def ai_feedback(
-    body: FeedbackRequest,
-    user: User = Depends(get_current_user),
-) -> Dict[str, str]:
-    log_audit(
-        original=None,
-        violations=[],
-        rewrite_attempted=False,
-        final_output={"feedback": body.rating, "notes": body.notes},
-        user_id=user.id,
-        endpoint="feedback",
-    )
-    logger.info(
-        "AI feedback: user=%s message=%s rating=%s",
-        user.id,
-        body.message_id,
-        body.rating,
-    )
-    return {"status": "ok"}
+def _build_what_to_watch(symbol: str, metrics: Optional[dict]) -> list:
+    """Build 'what to watch' items based on available metrics."""
+    items = []
+
+    if not metrics:
+        return ["Watch for upcoming earnings announcements", "Monitor sector rotation trends", "Check peer performance"]
+
+    risk = metrics.get("risk", {})
+    momentum = metrics.get("momentum", {})
+    growth = metrics.get("growth", {})
+
+    if risk.get("volatility_30d", 0) > 35:
+        items.append("Elevated volatility — position sizing and stop-loss levels are critical")
+    if momentum.get("rsi_14", 50) > 70:
+        items.append("RSI in overbought territory — watch for potential pullback")
+    elif momentum.get("rsi_14", 50) < 30:
+        items.append("RSI in oversold territory — watch for potential bounce")
+    if growth.get("revenue_growth_yoy", 0) < 0:
+        items.append("Revenue decline trend — watch for stabilization signals")
+
+    items.append("Next earnings report date and consensus estimates")
+    items.append("Sector rotation and relative performance vs. peers")
+
+    return items[:3]

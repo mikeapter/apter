@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, TrendingUp, TrendingDown, Loader2, AlertCircle } from "lucide-react";
 import {
   AreaChart,
   Area,
@@ -11,12 +11,12 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
-  BarChart,
-  Bar,
 } from "recharts";
-import { getStockDetail, generateStockChartData, type StockDetail, type GradeBreakdown } from "../../lib/stockData";
+import { getStockDetail, generateStockChartData } from "../../lib/stockData";
 import { GradeBadge } from "../ui/GradeBadge";
 import { ClientOnly } from "../ClientOnly";
+import { ConvictionScoreCard } from "../dashboard/ConvictionScoreCard";
+import { authGet } from "@/lib/fetchWithAuth";
 import { COMPLIANCE } from "../../lib/compliance";
 
 type TimeRange = "1D" | "1W" | "1M" | "3M" | "1Y" | "ALL";
@@ -24,64 +24,6 @@ const TIME_RANGES: TimeRange[] = ["1D", "1W", "1M", "3M", "1Y", "ALL"];
 
 function formatCurrency(n: number): string {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
-}
-
-function GradeBreakdownChart({ breakdown }: { breakdown: GradeBreakdown }) {
-  const data = [
-    { name: "Momentum", value: breakdown.momentum },
-    { name: "Valuation", value: breakdown.valuation },
-    { name: "Quality", value: breakdown.quality },
-    { name: "Volatility", value: breakdown.volatility },
-    { name: "Sentiment", value: breakdown.sentiment },
-  ];
-
-  function barColor(val: number): string {
-    if (val <= 3) return "hsl(var(--risk-off))";
-    if (val <= 7) return "hsl(var(--risk-neutral))";
-    return "hsl(var(--risk-on))";
-  }
-
-  return (
-    <ClientOnly>
-      <ResponsiveContainer width="100%" height={160}>
-        <BarChart data={data} layout="vertical" margin={{ top: 0, right: 20, bottom: 0, left: 0 }}>
-          <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" horizontal={false} />
-          <XAxis
-            type="number"
-            domain={[0, 10]}
-            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-            tickLine={false}
-            axisLine={false}
-          />
-          <YAxis
-            type="category"
-            dataKey="name"
-            tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-            tickLine={false}
-            axisLine={false}
-            width={80}
-          />
-          <Tooltip
-            contentStyle={{
-              background: "hsl(var(--card))",
-              border: "1px solid hsl(var(--border))",
-              borderRadius: 4,
-              fontSize: 12,
-            }}
-          />
-          <Bar
-            dataKey="value"
-            radius={[0, 3, 3, 0]}
-            fill="hsl(var(--risk-neutral))"
-          >
-            {data.map((entry, i) => (
-              <rect key={i} fill={barColor(entry.value)} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </ClientOnly>
-  );
 }
 
 function PriceChart({ ticker, range }: { ticker: string; range: TimeRange }) {
@@ -131,6 +73,191 @@ function PriceChart({ ticker, range }: { ticker: string; range: TimeRange }) {
         </AreaChart>
       </ResponsiveContainer>
     </ClientOnly>
+  );
+}
+
+/* ─── AI Overview types ─── */
+type AIOverview = {
+  ticker: string;
+  as_of: string;
+  snapshot: { price: number; day_change_pct: number; volume: number | null };
+  performance: Record<string, number | null>;
+  drivers: string[];
+  outlook: {
+    base_case: string;
+    bull_case: string;
+    bear_case: string;
+    probabilities: { base: number; bull: number; bear: number };
+  };
+  news: { headline: string; source: string; published_at: string; impact: string }[];
+  what_to_watch: string[];
+  disclaimer: string;
+};
+
+function impactColor(impact: string) {
+  if (impact === "positive") return "text-risk-on";
+  if (impact === "negative") return "text-risk-off";
+  return "text-muted-foreground";
+}
+
+function AIOverviewPanel({ ticker }: { ticker: string }) {
+  const [data, setData] = useState<AIOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!ticker) return;
+    setLoading(true);
+    setError(null);
+
+    authGet<AIOverview>(`/api/stocks/${encodeURIComponent(ticker)}/ai-overview`).then((res) => {
+      if (res.ok) {
+        setData(res.data);
+      } else {
+        setError(res.error || "Failed to load AI overview");
+      }
+      setLoading(false);
+    });
+  }, [ticker]);
+
+  if (loading) {
+    return (
+      <section className="bt-panel p-4">
+        <div className="bt-panel-title">AI PERFORMANCE OVERVIEW</div>
+        <div className="mt-4 flex items-center justify-center gap-2 py-8 text-muted-foreground text-sm">
+          <Loader2 size={14} className="animate-spin" />
+          Generating analysis...
+        </div>
+      </section>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <section className="bt-panel p-4">
+        <div className="bt-panel-title">AI PERFORMANCE OVERVIEW</div>
+        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+          <AlertCircle size={14} />
+          {error || "Overview unavailable"}
+        </div>
+      </section>
+    );
+  }
+
+  const perf = data.performance;
+  const perfEntries = Object.entries(perf).filter(([, v]) => v !== null) as [string, number][];
+
+  return (
+    <section className="bt-panel p-4 space-y-4">
+      <div className="bt-panel-title">AI PERFORMANCE OVERVIEW</div>
+
+      {/* Snapshot */}
+      <p className="text-sm text-muted-foreground leading-relaxed">
+        {data.ticker} is trading at {formatCurrency(data.snapshot.price)},{" "}
+        <span className={data.snapshot.day_change_pct >= 0 ? "text-risk-on" : "text-risk-off"}>
+          {data.snapshot.day_change_pct >= 0 ? "+" : ""}{data.snapshot.day_change_pct.toFixed(2)}%
+        </span>{" "}
+        today.
+      </p>
+
+      {/* Performance windows */}
+      {perfEntries.length > 0 && (
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">Performance</div>
+          <div className="flex flex-wrap gap-3">
+            {perfEntries.map(([k, v]) => (
+              <div key={k} className="rounded-md border border-border bg-panel-2 px-2.5 py-1.5 text-center">
+                <div className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground">{k}</div>
+                <div className={`text-sm font-mono font-medium ${v >= 0 ? "text-risk-on" : "text-risk-off"}`}>
+                  {v >= 0 ? "+" : ""}{v.toFixed(1)}%
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Drivers */}
+      {data.drivers.length > 0 && (
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">Key Drivers</div>
+          <ul className="space-y-1.5">
+            {data.drivers.map((d, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                <TrendingUp size={12} className="text-risk-on mt-0.5 shrink-0" />
+                {d}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Outlook */}
+      <div>
+        <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">Outlook</div>
+        <div className="space-y-2">
+          <div className="rounded-md border border-border bg-panel-2 px-3 py-2">
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-1">
+              <span className="font-semibold">BASE</span>
+              <span className="ml-auto">{data.outlook.probabilities.base}%</span>
+            </div>
+            <p className="text-xs leading-relaxed">{data.outlook.base_case}</p>
+          </div>
+          <div className="rounded-md border border-risk-on/20 bg-risk-on/5 px-3 py-2">
+            <div className="flex items-center gap-2 text-[10px] text-risk-on mb-1">
+              <TrendingUp size={10} />
+              <span className="font-semibold">BULL</span>
+              <span className="ml-auto">{data.outlook.probabilities.bull}%</span>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">{data.outlook.bull_case}</p>
+          </div>
+          <div className="rounded-md border border-risk-off/20 bg-risk-off/5 px-3 py-2">
+            <div className="flex items-center gap-2 text-[10px] text-risk-off mb-1">
+              <TrendingDown size={10} />
+              <span className="font-semibold">BEAR</span>
+              <span className="ml-auto">{data.outlook.probabilities.bear}%</span>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">{data.outlook.bear_case}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* News */}
+      {data.news.length > 0 && (
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">Recent News</div>
+          <div className="space-y-2">
+            {data.news.map((n, i) => (
+              <div key={i} className="border-b border-border pb-2 last:border-0 last:pb-0">
+                <div className="text-xs leading-snug">{n.headline}</div>
+                <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+                  <span>{n.source}</span>
+                  <span>&middot;</span>
+                  <span className={impactColor(n.impact)}>{n.impact}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* What to watch */}
+      {data.what_to_watch.length > 0 && (
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">What to Watch</div>
+          <ul className="space-y-1">
+            {data.what_to_watch.map((w, i) => (
+              <li key={i} className="text-xs text-muted-foreground">• {w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Disclaimer */}
+      <div className="text-[10px] text-muted-foreground pt-2 border-t border-border">
+        {COMPLIANCE.NOT_INVESTMENT_ADVICE}
+      </div>
+    </section>
   );
 }
 
@@ -193,16 +320,8 @@ export function StockDetailView({ ticker }: { ticker: string }) {
             <PriceChart ticker={ticker} range={range} />
           </section>
 
-          {/* AI Overview */}
-          <section className="bt-panel p-4">
-            <div className="bt-panel-title">AI PERFORMANCE OVERVIEW</div>
-            <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
-              {stock.aiOverview}
-            </p>
-            <div className="mt-2 text-[10px] text-muted-foreground">
-              {COMPLIANCE.NOT_INVESTMENT_ADVICE}
-            </div>
-          </section>
+          {/* AI Overview — fetched from backend */}
+          <AIOverviewPanel ticker={ticker} />
 
           {/* Decision Support */}
           <section className="bt-panel p-4">
@@ -225,18 +344,10 @@ export function StockDetailView({ ticker }: { ticker: string }) {
 
         {/* Right column */}
         <div className="lg:col-span-4 space-y-4">
-          {/* Grade breakdown */}
-          <section className="bt-panel p-4">
-            <div className="bt-panel-title">GRADE BREAKDOWN</div>
-            <div className="mt-3">
-              <GradeBreakdownChart breakdown={stock.gradeBreakdown} />
-            </div>
-            <div className="mt-2 text-[10px] text-muted-foreground">
-              {COMPLIANCE.GRADE_TOOLTIP}
-            </div>
-          </section>
+          {/* Conviction Score — fetched from backend */}
+          <ConvictionScoreCard ticker={ticker} />
 
-          {/* News */}
+          {/* News (from local stock data as fallback) */}
           <section className="bt-panel p-4">
             <div className="bt-panel-title">NEWS</div>
             <div className="mt-3 space-y-3">

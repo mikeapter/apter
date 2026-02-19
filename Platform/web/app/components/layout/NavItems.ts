@@ -5,7 +5,6 @@ import {
   LineChart,
   Search,
   CreditCard,
-  Settings,
   HelpCircle,
   Sparkles,
 } from "lucide-react";
@@ -17,6 +16,7 @@ export type NavItem = {
   priority: "HIGH" | "MED" | "LOW";
 };
 
+// Settings removed from sidebar — accessible only via user avatar dropdown
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, priority: "HIGH" },
   { label: "AI Overview", href: "/dashboard/ai-overview", icon: Sparkles, priority: "HIGH" },
@@ -25,6 +25,5 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Market Data", href: "/market-data", icon: LineChart, priority: "MED" },
   { label: "Screener", href: "/screener", icon: Search, priority: "MED" },
   { label: "Plans", href: "/plans", icon: CreditCard, priority: "MED" },
-  { label: "Settings", href: "/settings", icon: Settings, priority: "HIGH" },
   { label: "Help & Support", href: "/help-support", icon: HelpCircle, priority: "LOW" },
 ];
