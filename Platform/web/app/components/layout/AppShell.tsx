@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { FooterGuidance } from "./FooterGuidance";
-import { ApterAssistant } from "../assistant/ApterAssistant";
+import { AIAssistantPanel } from "../ai/AIAssistantPanel";
 
 const LS_KEY = "bt_sidebar_collapsed";
 
@@ -61,7 +61,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <FooterGuidance />
-      <ApterAssistant />
+      <AIAssistantPanel />
     </div>
   );
 }
