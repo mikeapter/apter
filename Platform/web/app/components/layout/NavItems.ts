@@ -6,6 +6,7 @@ import {
   Search,
   CreditCard,
   HelpCircle,
+  Sparkles,
 } from "lucide-react";
 
 export type NavItem = {
@@ -18,6 +19,7 @@ export type NavItem = {
 // Settings removed from sidebar — accessible only via user avatar dropdown
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, priority: "HIGH" },
+  { label: "AI Overview", href: "/dashboard/ai-overview", icon: Sparkles, priority: "HIGH" },
   { label: "Portfolio", href: "/portfolio", icon: Briefcase, priority: "HIGH" },
   { label: "Watchlist", href: "/watchlist", icon: Eye, priority: "MED" },
   { label: "Market Data", href: "/market-data", icon: LineChart, priority: "MED" },

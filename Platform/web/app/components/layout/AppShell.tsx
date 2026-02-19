@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { FooterGuidance } from "./FooterGuidance";
-import { ApterAssistant } from "../assistant/ApterAssistant";
+import { AIAssistantPanel } from "../ai/AIAssistantPanel";
 import { MobileBottomNav } from "./MobileBottomNav";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -47,7 +47,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile bottom nav */}
       <MobileBottomNav />
 
-      <ApterAssistant />
+      <AIAssistantPanel />
     </div>
   );
 }

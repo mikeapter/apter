@@ -3,13 +3,14 @@
 import { PortfolioPanel } from "../../components/dashboard/PortfolioPanel";
 import { PerformancePanel } from "../../components/dashboard/PerformancePanel";
 import { MarketMoversPanel } from "../../components/dashboard/MarketMoversPanel";
+import { AIOverviewCard } from "../../components/ai/AIOverviewCard";
 import { PortfolioProvider } from "../../providers/PortfolioProvider";
 
 export default function DashboardView() {
   return (
     <PortfolioProvider>
-      <div className="h-full">
-        <div className="grid gap-3 lg:grid-cols-12 h-full min-h-[500px]">
+      <div className="h-full space-y-3">
+        <div className="grid gap-3 lg:grid-cols-12 min-h-[500px]">
           {/* Left: Portfolio */}
           <div className="lg:col-span-3">
             <PortfolioPanel />
@@ -24,6 +25,11 @@ export default function DashboardView() {
           <div className="lg:col-span-3">
             <MarketMoversPanel />
           </div>
+        </div>
+
+        {/* AI Overview widget */}
+        <div className="max-w-3xl">
+          <AIOverviewCard />
         </div>
       </div>
     </PortfolioProvider>

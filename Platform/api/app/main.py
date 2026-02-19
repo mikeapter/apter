@@ -12,6 +12,8 @@ from app.routes import auth, twofa, bots, logs, system, dashboard, signals, insi
 from app.routes import subscriptions, admin, profile
 from app.routes import stripe as stripe_routes
 from app.routes import scores, quotes, ai, health, auth_refresh
+from app.routes import ai_assistant
+from app.routes import data as data_routes
 from app.db.init_db import init_db
 
 # Configure logging
@@ -88,4 +90,6 @@ app.include_router(admin.router)
 app.include_router(profile.router)
 app.include_router(scores.router)
 app.include_router(quotes.router)
-app.include_router(ai.router)
+app.include_router(ai.router)              # /api/chat + /api/stocks/{ticker}/ai-overview
+app.include_router(ai_assistant.router)     # /api/ai/chat, /api/ai/overview, /api/ai/feedback
+app.include_router(data_routes.router)      # /api/data/* tool endpoints
