@@ -56,7 +56,7 @@ function apiBase(): string {
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("token");
+  return localStorage.getItem("apter_token");
 }
 
 function authHeaders(extra?: Record<string, string>): Record<string, string> {
