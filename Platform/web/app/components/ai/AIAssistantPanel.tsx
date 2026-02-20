@@ -108,6 +108,7 @@ export function AIAssistantPanel() {
               );
             },
             onError(error) {
+              console.error("[AI Chat] SSE error:", error?.message || error);
               // Fallback to non-streaming JSON request
               chatJSON({ message: msg, context: { tickers: tickers.length ? tickers : undefined } })
                 .then((json) => {
@@ -125,13 +126,15 @@ export function AIAssistantPanel() {
                     ),
                   );
                 })
-                .catch(() => {
+                .catch((fallbackErr) => {
+                  const errMsg = fallbackErr?.message || String(fallbackErr);
+                  console.error("[AI Chat] JSON fallback error:", errMsg);
                   setMessages((prev) =>
                     prev.map((m) =>
                       m.id === assistantMsgId
                         ? {
                             ...m,
-                            content: "Unable to connect to the AI service. Please try again later.",
+                            content: `AI service error: ${errMsg.slice(0, 200)}`,
                             isStreaming: false,
                           }
                         : m,
