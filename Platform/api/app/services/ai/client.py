@@ -189,7 +189,7 @@ def _validate_and_return(
         # Ensure disclaimer is set
         parsed.setdefault(
             "disclaimer",
-            "Educational information only — not investment advice.",
+            "Not investment advice.",
         )
         try:
             return AIResponseSchema(**parsed)
@@ -255,7 +255,7 @@ def _attempt_rewrite_or_fallback(
     if rewrite_validation.ok:
         rewrite_parsed.setdefault(
             "disclaimer",
-            "Educational information only — not investment advice.",
+            "Not investment advice.",
         )
         log_audit(
             original=original,

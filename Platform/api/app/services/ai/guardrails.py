@@ -88,7 +88,7 @@ ALL_PATTERNS: list[tuple[str, list[re.Pattern]]] = [
     ("overconfidence", _OVERCONFIDENCE),
 ]
 
-REQUIRED_DISCLAIMER = "Educational information only — not investment advice."
+REQUIRED_DISCLAIMER = "Not investment advice."
 
 # ---------------------------------------------------------------------------
 # Audit log path

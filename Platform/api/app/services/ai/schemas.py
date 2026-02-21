@@ -28,7 +28,7 @@ class AIResponseSchema(BaseModel):
         default_factory=list, description="Things to monitor / consider"
     )
     disclaimer: str = Field(
-        default="Educational information only — not investment advice.",
+        default="Not investment advice.",
         description="Must always include the standard disclaimer",
     )
     citations: List[str] = Field(
@@ -60,9 +60,9 @@ class FeedbackRequest(BaseModel):
 
 
 SAFE_FALLBACK = AIResponseSchema(
-    summary="I can provide educational market information. Please ask a specific question about market data, financial concepts, or analytical frameworks.",
-    data_used=[],
-    explanation="This platform offers factual market data summaries, analytical framework explanations, risk factor descriptions, and educational financial content. All information is general in nature and not tailored to any individual.",
+    summary="I can pull real-time quotes, fundamentals, financials, technicals, and news for any ticker. Try asking about a specific stock or market topic.",
+    data_used=["Quotes", "Fundamentals", "Financials", "Technicals", "News"],
+    explanation="Ask me things like 'Break down AAPL earnings' or 'Compare MSFT vs GOOG revenue growth' — I'll fetch the relevant data and walk you through it.",
     watchlist_items=[],
     risk_flags=[
         "All investing involves risk including potential loss of principal"
@@ -72,6 +72,6 @@ SAFE_FALLBACK = AIResponseSchema(
         "Consult a qualified financial advisor for personalized guidance",
         "Review official filings and disclosures before making decisions",
     ],
-    disclaimer="Educational information only — not investment advice.",
+    disclaimer="Not investment advice.",
     citations=[],
 )

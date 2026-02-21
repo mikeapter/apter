@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Sparkles, X, Send } from "lucide-react";
-import { COMPLIANCE } from "../../lib/compliance";
+import { Sparkles, X, Send, Database } from "lucide-react";
 import { chatStream, chatJSON, type AIResponse } from "../../lib/api/ai";
 import { AIMessage } from "./AIMessage";
 import { AIPromptCards } from "./AIPromptCards";
@@ -194,10 +193,7 @@ export function AIAssistantPanel() {
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-panel">
         <div className="flex items-center gap-2">
           <Sparkles size={14} />
-          <span className="text-sm font-semibold">Apter AI Assistant</span>
-          <span className="text-[9px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-medium">
-            EDUCATIONAL ONLY
-          </span>
+          <span className="text-sm font-semibold">Apter AI</span>
         </div>
         <button
           type="button"
@@ -208,13 +204,9 @@ export function AIAssistantPanel() {
         </button>
       </div>
 
-      {/* Disclaimer */}
-      <div className="px-3 py-1.5 border-b border-border bg-panel-2">
-        <p className="text-[10px] text-muted-foreground">{COMPLIANCE.ASSISTANT_DISCLAIMER}</p>
-      </div>
-
       {/* Context selector (tickers) */}
       <div className="px-3 py-1.5 border-b border-border flex items-center gap-1.5 flex-wrap">
+        <Database size={10} className="text-muted-foreground shrink-0" />
         {tickers.map((t) => (
           <span
             key={t}
@@ -251,7 +243,7 @@ export function AIAssistantPanel() {
           <div className="space-y-3">
             <div className="text-center text-muted-foreground text-sm py-4">
               <Sparkles size={24} className="mx-auto mb-2 opacity-40" />
-              <p>Ask about market data, financial concepts, or analytical frameworks.</p>
+              <p>Ask about any stock, market conditions, or financial metric — I&apos;ll pull the data and break it down.</p>
             </div>
             <AIPromptCards onSelect={(prompt) => handleSubmit(prompt)} />
           </div>

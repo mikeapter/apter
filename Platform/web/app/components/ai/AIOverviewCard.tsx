@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { RefreshCw, AlertTriangle, CheckCircle, BookOpen } from "lucide-react";
+import { RefreshCw, AlertTriangle, CheckCircle, Database } from "lucide-react";
 import { fetchOverview, type AIResponse } from "../../lib/api/ai";
 
 type Props = {
@@ -35,7 +35,7 @@ export function AIOverviewCard({ tickers, timeframe = "daily" }: Props) {
     return (
       <div className="rounded-md border border-border bg-card p-4">
         <div className="flex items-center gap-2 mb-3">
-          <BookOpen size={16} className="text-muted-foreground" />
+          <Database size={16} className="text-muted-foreground" />
           <h3 className="text-sm font-semibold">AI Market Overview</h3>
         </div>
         <div className="space-y-2">
@@ -43,9 +43,6 @@ export function AIOverviewCard({ tickers, timeframe = "daily" }: Props) {
           <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
           <div className="h-4 bg-muted rounded animate-pulse w-1/2" />
         </div>
-        <p className="text-[10px] text-muted-foreground mt-3 italic">
-          Educational information only — not investment advice.
-        </p>
       </div>
     );
   }
@@ -54,7 +51,7 @@ export function AIOverviewCard({ tickers, timeframe = "daily" }: Props) {
     return (
       <div className="rounded-md border border-border bg-card p-4">
         <div className="flex items-center gap-2 mb-3">
-          <BookOpen size={16} className="text-muted-foreground" />
+          <Database size={16} className="text-muted-foreground" />
           <h3 className="text-sm font-semibold">AI Market Overview</h3>
         </div>
         <p className="text-sm text-orange-400">{error}</p>
@@ -76,7 +73,7 @@ export function AIOverviewCard({ tickers, timeframe = "daily" }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <BookOpen size={16} className="text-muted-foreground" />
+          <Database size={16} className="text-muted-foreground" />
           <h3 className="text-sm font-semibold">AI Market Overview</h3>
           {data.cached && (
             <span className="text-[10px] text-muted-foreground bg-panel px-1.5 py-0.5 rounded">cached</span>
@@ -93,15 +90,23 @@ export function AIOverviewCard({ tickers, timeframe = "daily" }: Props) {
         </button>
       </div>
 
+      {/* Data sources — shown prominently so users see what the AI pulled */}
+      {data.data_used?.length > 0 && (
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-panel rounded px-2 py-1">
+          <Database size={10} className="shrink-0" />
+          <span>Looking at: {data.data_used.join(", ")}</span>
+        </div>
+      )}
+
       {/* Summary */}
       <div>
         <p className="text-sm">{data.summary}</p>
       </div>
 
-      {/* Explanation */}
+      {/* Detail */}
       {data.explanation && (
         <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-0.5">Educational Context</div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-0.5">Detail</div>
           <p className="text-sm text-muted-foreground">{data.explanation}</p>
         </div>
       )}
@@ -150,27 +155,18 @@ export function AIOverviewCard({ tickers, timeframe = "daily" }: Props) {
         </div>
       )}
 
-      {/* Data sources */}
-      {data.data_used?.length > 0 && (
-        <div className="pt-1 border-t border-border/50">
-          <span className="text-[10px] text-muted-foreground">
-            Sources: {data.data_used.join(", ")}
-          </span>
-        </div>
-      )}
-
       {/* Citations */}
       {data.citations?.length > 0 && (
-        <div>
+        <div className="pt-1 border-t border-border/50">
           <span className="text-[10px] text-muted-foreground">
-            Citations: {data.citations.join(", ")}
+            Sources: {data.citations.join(", ")}
           </span>
         </div>
       )}
 
-      {/* Disclaimer */}
+      {/* Disclaimer — compact */}
       <div className="pt-1 border-t border-border/50">
-        <p className="text-[10px] text-muted-foreground italic">{data.disclaimer}</p>
+        <p className="text-[10px] text-muted-foreground/60">Not investment advice.</p>
       </div>
     </div>
   );

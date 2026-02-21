@@ -1,6 +1,6 @@
 "use client";
 
-import { ThumbsUp, ThumbsDown } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Database } from "lucide-react";
 import { useState } from "react";
 import { sendFeedback, type AIResponse } from "../../lib/api/ai";
 
@@ -41,16 +41,23 @@ export function AIMessage({ role, content, structured, messageId, isStreaming }:
     return (
       <div className="flex justify-start">
         <div className="max-w-[95%] rounded-md bg-panel border border-border px-3 py-2 space-y-2">
+          {/* Data sources — shown first so users see what the AI pulled */}
+          {structured.data_used?.length > 0 && (
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-panel-2 rounded px-2 py-1">
+              <Database size={10} className="shrink-0" />
+              <span>Looking at: {structured.data_used.join(", ")}</span>
+            </div>
+          )}
+
           {/* Summary */}
           <div>
-            <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Summary</div>
-            <p className="text-sm mt-0.5">{structured.summary}</p>
+            <p className="text-sm">{structured.summary}</p>
           </div>
 
-          {/* Explanation */}
+          {/* Detail */}
           {structured.explanation && (
             <div>
-              <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Explanation</div>
+              <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Detail</div>
               <p className="text-sm mt-0.5">{structured.explanation}</p>
             </div>
           )}
@@ -91,18 +98,9 @@ export function AIMessage({ role, content, structured, messageId, isStreaming }:
             </div>
           )}
 
-          {/* Data sources */}
-          {structured.data_used?.length > 0 && (
-            <div className="pt-1 border-t border-border/50">
-              <span className="text-[10px] text-muted-foreground">
-                Data: {structured.data_used.join(", ")}
-              </span>
-            </div>
-          )}
-
-          {/* Disclaimer */}
+          {/* Disclaimer — compact, non-intrusive */}
           <div className="pt-1 border-t border-border/50">
-            <p className="text-[10px] text-muted-foreground italic">{structured.disclaimer}</p>
+            <p className="text-[10px] text-muted-foreground/60">Not investment advice.</p>
           </div>
 
           {/* Feedback buttons */}

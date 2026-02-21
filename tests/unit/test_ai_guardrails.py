@@ -30,7 +30,7 @@ def _compliant_response(**overrides):
         "watchlist_items": ["SPY"],
         "risk_flags": ["Concentration risk in top-weighted index constituents"],
         "checklist": ["Monitor VIX for regime changes", "Review sector rotation patterns"],
-        "disclaimer": "Educational information only — not investment advice.",
+        "disclaimer": "Not investment advice.",
         "citations": [],
     }
     base.update(overrides)
@@ -240,7 +240,7 @@ class TestDisclaimer:
 
     def test_correct_disclaimer_passes(self):
         resp = _compliant_response(
-            disclaimer="Educational information only — not investment advice."
+            disclaimer="Not investment advice."
         )
         result = validate_ai_output(resp)
         assert result.ok is True
