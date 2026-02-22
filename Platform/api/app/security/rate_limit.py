@@ -1,23 +1,33 @@
 # Platform/api/app/security/rate_limit.py
 """
-In-memory sliding-window rate limiter for auth endpoints.
+Sliding-window rate limiter for auth endpoints.
 
+Uses Redis sorted sets if available, otherwise falls back to in-memory.
 Keyed by client IP (+ optional discriminator like email).
-Thread-safe via a lock.
-
-Limitation: in-memory only — not shared across workers/processes.
-For multi-worker deployments, swap with a Redis-backed implementation.
 """
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
+import uuid
 from collections import defaultdict
 from typing import Optional
 
 from fastapi import HTTPException, Request, status
 
+logger = logging.getLogger(__name__)
+
+
+def _get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+# ─── In-memory implementation ────────────────────────────────────────────────
 
 class _SlidingWindowCounter:
     """Per-key sliding window counter."""
@@ -40,7 +50,6 @@ class _SlidingWindowCounter:
 
     @property
     def retry_after(self) -> int:
-        """Seconds until the oldest request in the window expires."""
         if not self.timestamps:
             return 0
         now = time.monotonic()
@@ -48,15 +57,8 @@ class _SlidingWindowCounter:
         return max(1, int(self.window_seconds - (now - oldest)) + 1)
 
 
-class AuthRateLimiter:
-    """
-    In-memory sliding-window rate limiter.
-
-    Usage:
-        limiter = AuthRateLimiter(max_requests=5, window_seconds=60)
-        limiter.check(request)                # keyed by IP only
-        limiter.check(request, "user@x.com")  # keyed by IP + email
-    """
+class _InMemoryRateLimiter:
+    """In-memory sliding-window rate limiter (single-worker only)."""
 
     def __init__(self, max_requests: int = 5, window_seconds: int = 60):
         self.max_requests = max_requests
@@ -66,13 +68,7 @@ class AuthRateLimiter:
         )
         self._lock = threading.Lock()
         self._last_cleanup = time.monotonic()
-        self._cleanup_interval = 300  # purge stale keys every 5 min
-
-    def _get_client_ip(self, request: Request) -> str:
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        return request.client.host if request.client else "unknown"
+        self._cleanup_interval = 300
 
     def _maybe_cleanup(self):
         now = time.monotonic()
@@ -88,12 +84,8 @@ class AuthRateLimiter:
             del self._buckets[k]
 
     def check(self, request: Request, discriminator: Optional[str] = None):
-        """
-        Raise 429 if the rate limit is exceeded.
-        Key = client_ip or client_ip:discriminator.
-        """
-        ip = self._get_client_ip(request)
-        key = f"{ip}:{discriminator}" if discriminator else ip
+        ip = _get_client_ip(request)
+        key = f"rl:{ip}:{discriminator}" if discriminator else f"rl:{ip}"
 
         with self._lock:
             self._maybe_cleanup()
@@ -107,34 +99,86 @@ class AuthRateLimiter:
                 )
 
 
-# ── Pre-configured limiter instances (import in routes) ──────────────────────
-# These use values from security config but are created lazily to allow
-# config to be loaded first.
+# ─── Redis implementation ────────────────────────────────────────────────────
 
-_login_limiter: Optional[AuthRateLimiter] = None
-_refresh_limiter: Optional[AuthRateLimiter] = None
-_register_limiter: Optional[AuthRateLimiter] = None
+class _RedisRateLimiter:
+    """Redis-backed sliding-window rate limiter (shared across workers)."""
+
+    def __init__(self, redis_client, max_requests: int = 5, window_seconds: int = 60):
+        self._redis = redis_client
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+
+    def check(self, request: Request, discriminator: Optional[str] = None):
+        ip = _get_client_ip(request)
+        key = f"rl:{ip}:{discriminator}" if discriminator else f"rl:{ip}"
+
+        try:
+            now = time.time()
+            cutoff = now - self.window_seconds
+
+            pipe = self._redis.pipeline()
+            pipe.zremrangebyscore(key, "-inf", cutoff)  # Remove expired entries
+            pipe.zcard(key)                              # Count remaining
+            pipe.zadd(key, {str(uuid.uuid4()): now})     # Add this request
+            pipe.expire(key, self.window_seconds + 1)    # Auto-cleanup
+            results = pipe.execute()
+
+            count = results[1]  # zcard result
+
+            if count >= self.max_requests:
+                # Get oldest entry to calculate retry_after
+                oldest = self._redis.zrange(key, 0, 0, withscores=True)
+                if oldest:
+                    retry_after = max(1, int(self.window_seconds - (now - oldest[0][1])) + 1)
+                else:
+                    retry_after = self.window_seconds
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many requests. Please try again later.",
+                    headers={"Retry-After": str(retry_after)},
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            # Redis failure — log and allow (fail open for availability)
+            logger.warning("Redis rate limit error: %s — allowing request", str(e))
 
 
-def get_login_limiter() -> AuthRateLimiter:
+# ─── Factory: auto-select Redis or in-memory ─────────────────────────────────
+
+def _create_limiter(max_requests: int, window_seconds: int):
+    from app.security.redis import get_redis
+    r = get_redis()
+    if r is not None:
+        return _RedisRateLimiter(r, max_requests=max_requests, window_seconds=window_seconds)
+    return _InMemoryRateLimiter(max_requests=max_requests, window_seconds=window_seconds)
+
+
+_login_limiter = None
+_refresh_limiter = None
+_register_limiter = None
+
+
+def get_login_limiter():
     global _login_limiter
     if _login_limiter is None:
         from app.security.config import RATE_LIMIT_LOGIN
-        _login_limiter = AuthRateLimiter(max_requests=RATE_LIMIT_LOGIN, window_seconds=60)
+        _login_limiter = _create_limiter(max_requests=RATE_LIMIT_LOGIN, window_seconds=60)
     return _login_limiter
 
 
-def get_refresh_limiter() -> AuthRateLimiter:
+def get_refresh_limiter():
     global _refresh_limiter
     if _refresh_limiter is None:
         from app.security.config import RATE_LIMIT_REFRESH
-        _refresh_limiter = AuthRateLimiter(max_requests=RATE_LIMIT_REFRESH, window_seconds=60)
+        _refresh_limiter = _create_limiter(max_requests=RATE_LIMIT_REFRESH, window_seconds=60)
     return _refresh_limiter
 
 
-def get_register_limiter() -> AuthRateLimiter:
+def get_register_limiter():
     global _register_limiter
     if _register_limiter is None:
         from app.security.config import RATE_LIMIT_REGISTER
-        _register_limiter = AuthRateLimiter(max_requests=RATE_LIMIT_REGISTER, window_seconds=60)
+        _register_limiter = _create_limiter(max_requests=RATE_LIMIT_REGISTER, window_seconds=60)
     return _register_limiter

@@ -14,3 +14,4 @@ stripe>=8.0.0
 psycopg2-binary>=2.9.9
 pyyaml>=6.0
 python-multipart>=0.0.9
+redis>=5.0.0
