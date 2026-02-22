@@ -5,6 +5,7 @@
  */
 
 const LS_TOKEN = "apter_token";
+const LS_REFRESH_TOKEN = "apter_refresh_token";
 const COOKIE_NAME = "apter_session";
 const USER_KEY = "apter_user";
 
@@ -19,6 +20,14 @@ export type StoredUser = {
 export function getToken(): string | null {
   try {
     return localStorage.getItem(LS_TOKEN);
+  } catch {
+    return null;
+  }
+}
+
+export function getRefreshToken(): string | null {
+  try {
+    return localStorage.getItem(LS_REFRESH_TOKEN);
   } catch {
     return null;
   }
@@ -45,9 +54,16 @@ export function setToken(token: string, remember = false): void {
   document.cookie = `${COOKIE_NAME}=1; path=/${maxAge}; SameSite=Lax${secure}`;
 }
 
+export function setRefreshToken(token: string): void {
+  try {
+    localStorage.setItem(LS_REFRESH_TOKEN, token);
+  } catch {}
+}
+
 export function clearToken(): void {
   try {
     localStorage.removeItem(LS_TOKEN);
+    localStorage.removeItem(LS_REFRESH_TOKEN);
   } catch {}
   document.cookie = `${COOKIE_NAME}=; path=/; max-age=0`;
 }
