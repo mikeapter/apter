@@ -13,7 +13,9 @@ from app.routes import stripe as stripe_routes
 from app.routes import scores, quotes, ai, health, auth_refresh
 from app.routes import ai_assistant
 from app.routes import data as data_routes
+from app.routes import market as market_routes
 from app.db.init_db import init_db
+from app.services.finnhub.config import log_status as finnhub_log_status
 
 from app.security.config import ALLOWED_ORIGINS, ENABLE_DOCS, IS_PRODUCTION
 from app.security.middleware import RequestSizeLimitMiddleware, SecurityHeadersMiddleware
@@ -53,6 +55,7 @@ app = _create_app()
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
+    finnhub_log_status()
     logger.info("Apter Financial API started — v0.2.0 (env=%s, docs=%s)", "prod" if IS_PRODUCTION else "dev", ENABLE_DOCS)
 
 
@@ -104,3 +107,4 @@ app.include_router(quotes.router)
 app.include_router(ai.router)              # /api/chat + /api/stocks/{ticker}/ai-overview
 app.include_router(ai_assistant.router)     # /api/ai/chat, /api/ai/overview, /api/ai/feedback
 app.include_router(data_routes.router)      # /api/data/* tool endpoints
+app.include_router(market_routes.router)    # /api/market/* Finnhub endpoints
