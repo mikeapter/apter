@@ -5,7 +5,7 @@
  * - Prevents refresh storms across tabs with in-memory lock
  */
 
-import { getToken, setToken, clearToken, clearStoredUser } from "./auth";
+import { getToken, getRefreshToken, setToken, setRefreshToken, clearToken, clearStoredUser } from "./auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 const TIMEOUT_MS = 12_000;
@@ -19,16 +19,16 @@ function buildUrl(path: string): string {
 }
 
 async function refreshAccessToken(): Promise<string | null> {
-  const token = getToken();
-  if (!token) return null;
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
 
   try {
     const res = await fetch(buildUrl("/auth/refresh"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
       },
+      body: JSON.stringify({ refresh_token: refreshToken }),
       cache: "no-store",
     });
 
@@ -40,6 +40,9 @@ async function refreshAccessToken(): Promise<string | null> {
         ? localStorage.getItem("apter_remember") === "1"
         : false;
       setToken(data.access_token, remember);
+      if (data.refresh_token) {
+        setRefreshToken(data.refresh_token);
+      }
       return data.access_token;
     }
     return null;
