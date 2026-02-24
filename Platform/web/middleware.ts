@@ -4,6 +4,10 @@ const PUBLIC_PATHS = new Set(["/", "/login", "/signup", "/register", "/forgot-pa
 
 const PUBLIC_PREFIXES = ["/api/", "/auth/", "/v1/", "/2fa/", "/_next/", "/favicon", "/logo"];
 
+// Build connect-src dynamically to include the API origin if set
+const _apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+const _connectSrc = _apiBase ? `connect-src 'self' ${_apiBase}` : "connect-src 'self'";
+
 // Content Security Policy for the frontend
 const CSP_DIRECTIVES = [
   "default-src 'self'",
@@ -11,7 +15,7 @@ const CSP_DIRECTIVES = [
   "style-src 'self' 'unsafe-inline'",             // Next.js + Tailwind use inline styles
   "img-src 'self' data: blob: https:",            // Allow images from self, data URIs, and HTTPS
   "font-src 'self'",
-  "connect-src 'self'",                           // API calls go through same-origin rewrites
+  _connectSrc,                                    // API calls (same-origin + API base if set)
   "frame-ancestors 'none'",                       // Prevent clickjacking
   "base-uri 'self'",                              // Prevent base tag injection
   "form-action 'self'",                           // Restrict form submissions
