@@ -26,13 +26,12 @@ export type RegisterResponse = {
   user_id: number;
   email: string;
   access_token: string;
-  refresh_token: string;
   token_type: string;
 };
 
 export type LoginResponse =
   | { requires_2fa: true; user_id: number; message: string }
-  | { access_token: string; refresh_token: string; token_type: string };
+  | { access_token: string; token_type: string };
 
 export type SubscriptionMeResponse = {
   tier: PlanTier;
@@ -232,8 +231,7 @@ export function registerUser(email: string, password: string): RegisterResponse 
   };
   sessionsByToken.set(token, sess);
 
-  const refreshToken = issueToken();
-  return { user_id: u.user_id, email: u.email, access_token: token, refresh_token: refreshToken, token_type: "bearer" };
+  return { user_id: u.user_id, email: u.email, access_token: token, token_type: "bearer" };
 }
 
 export function loginUser(email: string, password: string): LoginResponse {
@@ -259,8 +257,7 @@ export function loginUser(email: string, password: string): LoginResponse {
   };
   sessionsByToken.set(token, sess);
 
-  const refreshToken = issueToken();
-  return { access_token: token, refresh_token: refreshToken, token_type: "bearer" };
+  return { access_token: token, token_type: "bearer" };
 }
 
 export function setTierForToken(token: string, tier: PlanTier) {

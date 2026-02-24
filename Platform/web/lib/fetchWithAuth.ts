@@ -1,11 +1,11 @@
 /**
  * Resilient fetch wrapper with auth token refresh.
- * - On 401: refresh token once, retry original request
+ * - On 401: refresh token once (via HTTP-only cookie), retry original request
  * - On network error/timeout/5xx: DO NOT logout, show transient error
  * - Prevents refresh storms across tabs with in-memory lock
  */
 
-import { getToken, getRefreshToken, setToken, setRefreshToken, clearToken, clearStoredUser } from "./auth";
+import { getToken, setToken, clearToken, clearStoredUser } from "./auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 const TIMEOUT_MS = 12_000;
@@ -19,16 +19,14 @@ function buildUrl(path: string): string {
 }
 
 async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) return null;
-
+  // The refresh token is in an HTTP-only cookie — the browser sends it
+  // automatically. We just POST to /auth/refresh with credentials: include.
   try {
     const res = await fetch(buildUrl("/auth/refresh"), {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+      credentials: "include",
       cache: "no-store",
     });
 
@@ -40,9 +38,6 @@ async function refreshAccessToken(): Promise<string | null> {
         ? localStorage.getItem("apter_remember") === "1"
         : false;
       setToken(data.access_token, remember);
-      if (data.refresh_token) {
-        setRefreshToken(data.refresh_token);
-      }
       return data.access_token;
     }
     return null;
@@ -65,6 +60,12 @@ async function getRefreshedToken(): Promise<string | null> {
 function forceLogout(): void {
   clearToken();
   clearStoredUser();
+  // Clear the HTTP-only refresh cookie
+  try {
+    fetch(buildUrl("/auth/logout"), { method: "POST", credentials: "include" });
+  } catch {
+    // Fire-and-forget
+  }
   if (typeof window !== "undefined") {
     const next = encodeURIComponent(window.location.pathname);
     window.location.href = `/login?next=${next}`;
@@ -99,6 +100,7 @@ export async function fetchWithAuth<T>(
       ...options,
       headers,
       signal: controller.signal,
+      credentials: "include",
       cache: "no-store",
     });
 
@@ -119,6 +121,7 @@ export async function fetchWithAuth<T>(
         const retryRes = await fetch(url, {
           ...options,
           headers,
+          credentials: "include",
           cache: "no-store",
         });
 

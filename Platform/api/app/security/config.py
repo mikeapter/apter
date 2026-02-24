@@ -56,3 +56,10 @@ REFRESH_TOKEN_DAYS = int(os.getenv("REFRESH_TOKEN_DAYS", "14"))
 # ── Lockout ──────────────────────────────────────────────────────────────────
 LOCKOUT_THRESHOLD = int(os.getenv("LOCKOUT_THRESHOLD", "5"))
 LOCKOUT_DURATION_MINUTES = int(os.getenv("LOCKOUT_DURATION_MINUTES", "15"))
+
+# ── Refresh Token Cookie ────────────────────────────────────────────────
+REFRESH_COOKIE_NAME = "apter_refresh"
+REFRESH_COOKIE_PATH = "/auth"
+
+# ── Password Reset ──────────────────────────────────────────────────────
+PASSWORD_RESET_TOKEN_MINUTES = int(os.getenv("PASSWORD_RESET_TOKEN_MINUTES", "15"))
