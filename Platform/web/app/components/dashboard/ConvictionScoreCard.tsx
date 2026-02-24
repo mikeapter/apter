@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { TrendingUp, TrendingDown, AlertTriangle, Shield } from "lucide-react";
 import { authGet } from "@/lib/fetchWithAuth";
+import { FeatureGate } from "../billing/FeatureGate";
+import { TierBadge } from "../billing/TierBadge";
 import { MethodologyLink } from "../methodology/MethodologyLink";
 
 type BandInfo = { label: string; color: string };
@@ -113,58 +115,68 @@ export function ConvictionScoreCard({ ticker }: { ticker: string }) {
         <span>{data.model_version}</span>
       </div>
 
-      {/* Pillar bars */}
-      <div className="space-y-2">
-        <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Pillar Scores</div>
-        <PillarBar name="Quality" score={data.pillars.quality} />
-        <PillarBar name="Value" score={data.pillars.value} />
-        <PillarBar name="Growth" score={data.pillars.growth} />
-        <PillarBar name="Momentum" score={data.pillars.momentum} />
-        <PillarBar name="Risk" score={data.pillars.risk} />
-      </div>
-
-      {/* Drivers */}
-      {(data.drivers.positive.length > 0 || data.drivers.negative.length > 0) && (
+      {/* Pillar breakdown — gated to Signals+ */}
+      <FeatureGate
+        requiredTier="signals"
+        title="Full Pillar Breakdown"
+        benefits={["Detailed quality, value, growth, momentum & risk scores", "Key positive and negative drivers with impact values"]}
+      >
+        {/* Pillar bars */}
         <div className="space-y-2">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Key Drivers</div>
-          {data.drivers.positive.slice(0, 3).map((d, i) => (
-            <div key={i} className="flex items-start gap-2 text-xs">
-              <TrendingUp size={12} className="text-risk-on mt-0.5 shrink-0" />
-              <div>
-                <span className="font-medium">{d.name}</span>
-                <span className="text-muted-foreground ml-1">({d.impact > 0 ? "+" : ""}{d.impact.toFixed(1)})</span>
-              </div>
-            </div>
-          ))}
-          {data.drivers.negative.slice(0, 3).map((d, i) => (
-            <div key={i} className="flex items-start gap-2 text-xs">
-              <TrendingDown size={12} className="text-risk-off mt-0.5 shrink-0" />
-              <div>
-                <span className="font-medium">{d.name}</span>
-                <span className="text-muted-foreground ml-1">({d.impact.toFixed(1)})</span>
-              </div>
-            </div>
-          ))}
+          <div className="flex items-center gap-2">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Pillar Scores</div>
+            <TierBadge tier="signals" />
+          </div>
+          <PillarBar name="Quality" score={data.pillars.quality} />
+          <PillarBar name="Value" score={data.pillars.value} />
+          <PillarBar name="Growth" score={data.pillars.growth} />
+          <PillarBar name="Momentum" score={data.pillars.momentum} />
+          <PillarBar name="Risk" score={data.pillars.risk} />
         </div>
-      )}
 
-      {/* Penalties/Caps */}
-      {data.penalties_and_caps_applied.length > 0 && (
-        <div className="space-y-1.5">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Risk Adjustments</div>
-          {data.penalties_and_caps_applied.map((p, i) => (
-            <div key={i} className="flex items-start gap-2 text-xs text-risk-off">
-              <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-              <div>
-                <span className="font-medium">{p.name}</span>
-                <span className="text-muted-foreground ml-1">
-                  ({p.type === "cap" ? `capped at ${p.value}` : `${p.value}`})
-                </span>
+        {/* Drivers */}
+        {(data.drivers.positive.length > 0 || data.drivers.negative.length > 0) && (
+          <div className="space-y-2 mt-4">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Key Drivers</div>
+            {data.drivers.positive.slice(0, 3).map((d, i) => (
+              <div key={i} className="flex items-start gap-2 text-xs">
+                <TrendingUp size={12} className="text-risk-on mt-0.5 shrink-0" />
+                <div>
+                  <span className="font-medium">{d.name}</span>
+                  <span className="text-muted-foreground ml-1">({d.impact > 0 ? "+" : ""}{d.impact.toFixed(1)})</span>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+            {data.drivers.negative.slice(0, 3).map((d, i) => (
+              <div key={i} className="flex items-start gap-2 text-xs">
+                <TrendingDown size={12} className="text-risk-off mt-0.5 shrink-0" />
+                <div>
+                  <span className="font-medium">{d.name}</span>
+                  <span className="text-muted-foreground ml-1">({d.impact.toFixed(1)})</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Penalties/Caps */}
+        {data.penalties_and_caps_applied.length > 0 && (
+          <div className="space-y-1.5 mt-4">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Risk Adjustments</div>
+            {data.penalties_and_caps_applied.map((p, i) => (
+              <div key={i} className="flex items-start gap-2 text-xs text-risk-off">
+                <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                <div>
+                  <span className="font-medium">{p.name}</span>
+                  <span className="text-muted-foreground ml-1">
+                    ({p.type === "cap" ? `capped at ${p.value}` : `${p.value}`})
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </FeatureGate>
     </section>
   );
 }
