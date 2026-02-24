@@ -8,7 +8,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { apiPost } from "@/lib/api";
 import { validatePassword, validateConfirmPassword } from "@/lib/validation";
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const token = searchParams?.get("token") || "";
 
@@ -245,5 +245,19 @@ export default function ResetPasswordPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <React.Suspense fallback={
+      <div className="min-h-screen flex flex-col justify-center py-12 px-4">
+        <div className="auth-card text-center">
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    }>
+      <ResetPasswordForm />
+    </React.Suspense>
   );
 }
