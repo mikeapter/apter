@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { TrendingUp, TrendingDown, AlertTriangle, Shield } from "lucide-react";
 import { authGet } from "@/lib/fetchWithAuth";
+import { MethodologyLink } from "../methodology/MethodologyLink";
 
 type BandInfo = { label: string; color: string };
 type PillarScores = { quality: number; value: number; growth: number; momentum: number; risk: number };
@@ -88,7 +89,10 @@ export function ConvictionScoreCard({ ticker }: { ticker: string }) {
 
   return (
     <section className="bt-panel p-4 space-y-4">
-      <div className="bt-panel-title">APTER CONVICTION SCORE</div>
+      <div className="flex items-center justify-between">
+        <div className="bt-panel-title">APTER CONVICTION SCORE</div>
+        <MethodologyLink />
+      </div>
 
       {/* Big score */}
       <div className="flex items-center gap-4">
