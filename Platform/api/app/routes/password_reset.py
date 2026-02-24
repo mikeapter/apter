@@ -5,8 +5,8 @@ Password reset endpoints.
 POST /auth/forgot-password — Request a password reset (rate-limited).
 POST /auth/reset-password  — Submit new password with reset token.
 
-NOTE: Email delivery is not yet implemented. Reset links are logged to
-the security audit log. Wire up SendGrid / SES when ready.
+Emails are sent via SendGrid when SENDGRID_API_KEY is set. Otherwise
+the reset URL is logged for manual retrieval.
 """
 
 from __future__ import annotations
@@ -25,6 +25,7 @@ from app.security.config import RATE_LIMIT_FORGOT_PASSWORD
 from app.security.rate_limit import get_login_limiter
 from app.security.password_reset import password_reset_store
 from app.security.audit import audit_log
+from app.services.email_service import send_password_reset_email
 
 logger = logging.getLogger(__name__)
 
@@ -87,8 +88,7 @@ def forgot_password(
 
         logger.info("Password reset requested for user %s", user.id)
 
-        # TODO: Send email with reset_url via SendGrid/SES
-        # send_reset_email(normalized_email, reset_url)
+        send_password_reset_email(normalized_email, reset_url)
     else:
         # Log attempt for non-existent email (don't reveal to client)
         audit_log(
