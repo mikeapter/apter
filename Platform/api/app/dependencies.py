@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.services.auth_service import decode_access_token
 from app.models.user import User
+from app.services.plans import PlanTier, is_complimentary_pro
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
@@ -53,6 +54,13 @@ def get_current_user(
             detail="Account suspended",
         )
 
+    # Auto-upgrade complimentary Pro accounts
+    if is_complimentary_pro(user.email) and user.subscription_tier != PlanTier.pro.value:
+        user.subscription_tier = PlanTier.pro.value
+        user.subscription_status = "active"
+        user.subscription_provider = "complimentary"
+        db.commit()
+
     return user
 
 
@@ -69,6 +77,13 @@ def get_optional_user(
         user_id = payload.get("sub")
         if not user_id:
             return None
-        return db.query(User).filter(User.id == int(user_id)).first()
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        # Auto-upgrade complimentary Pro accounts
+        if user and is_complimentary_pro(user.email) and user.subscription_tier != PlanTier.pro.value:
+            user.subscription_tier = PlanTier.pro.value
+            user.subscription_status = "active"
+            user.subscription_provider = "complimentary"
+            db.commit()
+        return user
     except Exception:
         return None
