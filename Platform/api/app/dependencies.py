@@ -1,3 +1,5 @@
+# Platform/api/app/dependencies.py
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -23,6 +25,13 @@ def get_current_user(
             detail="Invalid authentication token",
         )
 
+    # Reject refresh tokens used as access tokens
+    if payload.get("type") == "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token",
+        )
+
     user_id = payload.get("sub")
 
     if not user_id:
@@ -37,6 +46,12 @@ def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account suspended",
         )
 
     # Auto-upgrade complimentary Pro accounts
@@ -57,6 +72,8 @@ def get_optional_user(
         return None
     try:
         payload = decode_access_token(token)
+        if payload.get("type") == "refresh":
+            return None
         user_id = payload.get("sub")
         if not user_id:
             return None
