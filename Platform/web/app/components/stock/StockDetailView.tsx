@@ -16,6 +16,8 @@ import { getStockDetail, generateStockChartData } from "../../lib/stockData";
 import { GradeBadge } from "../ui/GradeBadge";
 import { ClientOnly } from "../ClientOnly";
 import { ConvictionScoreCard } from "../dashboard/ConvictionScoreCard";
+import { QuoteBox } from "./QuoteBox";
+import { CandlestickChart } from "./CandlestickChart";
 import { authGet } from "@/lib/fetchWithAuth";
 import { COMPLIANCE } from "../../lib/compliance";
 
@@ -320,6 +322,9 @@ export function StockDetailView({ ticker }: { ticker: string }) {
             <PriceChart ticker={ticker} range={range} />
           </section>
 
+          {/* Candlestick chart — Finnhub-powered OHLCV */}
+          <CandlestickChart ticker={ticker} />
+
           {/* AI Overview — fetched from backend */}
           <AIOverviewPanel ticker={ticker} />
 
@@ -344,6 +349,9 @@ export function StockDetailView({ ticker }: { ticker: string }) {
 
         {/* Right column */}
         <div className="lg:col-span-4 space-y-4">
+          {/* Live Quote — Finnhub-powered, auto-refreshes every 15s */}
+          <QuoteBox ticker={ticker} />
+
           {/* Conviction Score — fetched from backend */}
           <ConvictionScoreCard ticker={ticker} />
 
