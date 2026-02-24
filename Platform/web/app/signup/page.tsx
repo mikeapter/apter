@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { apiPost } from "@/lib/api";
-import { setToken, setRefreshToken, setStoredUser } from "@/lib/auth";
+import { setToken, setStoredUser } from "@/lib/auth";
 import { track } from "@/lib/analytics";
 import {
   validateName,
@@ -33,7 +33,6 @@ type RegisterResponse = {
   first_name: string;
   last_name: string;
   access_token: string;
-  refresh_token?: string;
   token_type: string;
 };
 
@@ -133,11 +132,8 @@ export default function SignupPage() {
       return;
     }
 
-    // Store auth state
+    // Store auth state (refresh token is set via HTTP-only cookie by the API)
     setToken(result.data.access_token);
-    if (result.data.refresh_token) {
-      setRefreshToken(result.data.refresh_token);
-    }
     setStoredUser({
       id: result.data.user_id,
       email: result.data.email,

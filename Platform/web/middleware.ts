@@ -1,14 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PUBLIC_PATHS = new Set(["/", "/login", "/signup", "/register", "/forgot-password", "/plans", "/terms", "/privacy", "/disclaimer"]);
+const PUBLIC_PATHS = new Set(["/", "/login", "/signup", "/register", "/forgot-password", "/reset-password", "/plans", "/terms", "/privacy", "/disclaimer"]);
 
 const PUBLIC_PREFIXES = ["/api/", "/auth/", "/v1/", "/2fa/", "/_next/", "/favicon", "/logo"];
+
+// Content Security Policy for the frontend
+const CSP_DIRECTIVES = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",           // Next.js hydration requires inline scripts
+  "style-src 'self' 'unsafe-inline'",             // Next.js + Tailwind use inline styles
+  "img-src 'self' data: blob: https:",            // Allow images from self, data URIs, and HTTPS
+  "font-src 'self'",
+  "connect-src 'self'",                           // API calls go through same-origin rewrites
+  "frame-ancestors 'none'",                       // Prevent clickjacking
+  "base-uri 'self'",                              // Prevent base tag injection
+  "form-action 'self'",                           // Restrict form submissions
+  "object-src 'none'",                            // Block plugins (Flash, etc.)
+].join("; ");
+
+function addSecurityHeaders(response: NextResponse): NextResponse {
+  response.headers.set("Content-Security-Policy", CSP_DIRECTIVES);
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+  response.headers.set("X-XSS-Protection", "0");
+  return response;
+}
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths
-  if (PUBLIC_PATHS.has(pathname)) return NextResponse.next();
+  if (PUBLIC_PATHS.has(pathname)) {
+    return addSecurityHeaders(NextResponse.next());
+  }
 
   // Allow public prefixes (API, assets, etc.)
   if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
@@ -24,7 +50,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  return addSecurityHeaders(NextResponse.next());
 }
 
 export const config = {

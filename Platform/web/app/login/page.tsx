@@ -6,13 +6,13 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { apiPost, apiGet } from "@/lib/api";
-import { setToken, setRefreshToken, setStoredUser } from "@/lib/auth";
+import { setToken, setStoredUser } from "@/lib/auth";
 import { track } from "@/lib/analytics";
 import { validateEmail } from "@/lib/validation";
 
 type LoginResponse =
   | { requires_2fa: true; user_id: number; message: string }
-  | { access_token: string; refresh_token?: string; token_type: string };
+  | { access_token: string; token_type: string };
 
 type ProfileResponse = {
   id: number;
@@ -75,11 +75,8 @@ export default function LoginPage() {
       return;
     }
 
-    const loginData = result.data as { access_token: string; refresh_token?: string; token_type: string };
+    const loginData = result.data as { access_token: string; token_type: string };
     setToken(loginData.access_token, rememberDevice);
-    if (loginData.refresh_token) {
-      setRefreshToken(loginData.refresh_token);
-    }
 
     // Fetch user profile to store name for greeting
     try {

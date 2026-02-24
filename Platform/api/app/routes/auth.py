@@ -6,7 +6,7 @@ import re
 from datetime import timedelta
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session
 
@@ -22,7 +22,13 @@ from app.services.auth_service import (
 )
 from app.services.hubspot_service import sync_contact_to_hubspot
 
-from app.security.config import ACCESS_TOKEN_MINUTES, REFRESH_TOKEN_DAYS
+from app.security.config import (
+    ACCESS_TOKEN_MINUTES,
+    IS_PRODUCTION,
+    REFRESH_COOKIE_NAME,
+    REFRESH_COOKIE_PATH,
+    REFRESH_TOKEN_DAYS,
+)
 from app.security.rate_limit import get_login_limiter, get_register_limiter
 from app.security.lockout import login_lockout
 from app.security.tokens import refresh_token_store
@@ -72,7 +78,6 @@ class RegisterResponse(BaseModel):
     first_name: str
     last_name: str
     access_token: str
-    refresh_token: str
     token_type: str = "bearer"
 
 
@@ -86,6 +91,41 @@ class Login2FARequest(BaseModel):
     user_id: int
     code: str
     trust_device: bool = False
+
+
+# ── Cookie helpers ───────────────────────────────────────────────────────────
+
+def _set_refresh_cookie(
+    response: Response,
+    refresh_token: str,
+    remember_device: bool = False,
+) -> None:
+    """Set the refresh token as an HTTP-only secure cookie."""
+    max_age = (
+        REMEMBER_TOKEN_EXPIRE_DAYS * 86400
+        if remember_device
+        else REFRESH_TOKEN_DAYS * 86400
+    )
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        httponly=True,
+        secure=IS_PRODUCTION,
+        samesite="lax",
+        path=REFRESH_COOKIE_PATH,
+        max_age=max_age,
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    """Delete the refresh token cookie."""
+    response.delete_cookie(
+        key=REFRESH_COOKIE_NAME,
+        httponly=True,
+        secure=IS_PRODUCTION,
+        samesite="lax",
+        path=REFRESH_COOKIE_PATH,
+    )
 
 
 # ── Helper: issue token pair ─────────────────────────────────────────────────
@@ -122,6 +162,7 @@ def _issue_token_pair(user_id: int, remember_device: bool = False) -> dict:
         "access_token": access_token,
         "refresh_token": raw_refresh,
         "token_type": "bearer",
+        "remember_device": remember_device,
     }
 
 
@@ -132,6 +173,7 @@ def _issue_token_pair(user_id: int, remember_device: bool = False) -> dict:
 def register(
     payload: RegisterRequest,
     request: Request,
+    response: Response,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
@@ -171,6 +213,9 @@ def register(
 
     tokens = _issue_token_pair(user.id)
 
+    # Set refresh token as HTTP-only cookie
+    _set_refresh_cookie(response, tokens["refresh_token"])
+
     audit_log(
         "register",
         request=request,
@@ -185,7 +230,6 @@ def register(
         first_name=user.first_name or "",
         last_name=user.last_name or "",
         access_token=tokens["access_token"],
-        refresh_token=tokens["refresh_token"],
     )
 
 
@@ -196,6 +240,7 @@ def register(
 def login(
     payload: LoginRequest,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
 ):
     normalized_email = str(payload.email).lower().strip()
@@ -221,6 +266,21 @@ def login(
             detail="Invalid credentials",
         )
 
+    # Check account suspension
+    if not user.is_active:
+        audit_log(
+            "auth_failure",
+            request=request,
+            user_id=user.id,
+            email=normalized_email,
+            success=False,
+            details={"reason": "account_suspended"},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account suspended",
+        )
+
     if user.is_2fa_enabled:
         # Don't clear lockout yet — 2FA still needed
         audit_log(
@@ -241,6 +301,9 @@ def login(
 
     tokens = _issue_token_pair(user.id, remember_device=payload.remember_device)
 
+    # Set refresh token as HTTP-only cookie
+    _set_refresh_cookie(response, tokens["refresh_token"], remember_device=payload.remember_device)
+
     audit_log(
         "auth_success",
         request=request,
@@ -249,7 +312,10 @@ def login(
         success=True,
     )
 
-    return tokens
+    return {
+        "access_token": tokens["access_token"],
+        "token_type": "bearer",
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -259,6 +325,7 @@ def login(
 def login_2fa(
     payload: Login2FARequest,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
 ):
     # Rate limit 2FA attempts with the login limiter
@@ -270,6 +337,13 @@ def login_2fa(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid 2FA session",
+        )
+
+    # Check account suspension
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account suspended",
         )
 
     # --- Try TOTP first ---
@@ -322,6 +396,9 @@ def login_2fa(
 
     tokens = _issue_token_pair(user.id, remember_device=payload.trust_device)
 
+    # Set refresh token as HTTP-only cookie
+    _set_refresh_cookie(response, tokens["refresh_token"], remember_device=payload.trust_device)
+
     audit_log(
         "auth_success",
         request=request,
@@ -331,7 +408,19 @@ def login_2fa(
         details={"method": "2fa"},
     )
 
-    return tokens
+    return {
+        "access_token": tokens["access_token"],
+        "token_type": "bearer",
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LOGOUT — clear refresh token cookie + revoke server-side
+# ─────────────────────────────────────────────────────────────────────────────
+@router.post("/logout")
+def logout(request: Request, response: Response):
+    _clear_refresh_cookie(response)
+    return {"detail": "Logged out"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
