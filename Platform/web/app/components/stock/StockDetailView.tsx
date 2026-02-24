@@ -18,6 +18,8 @@ import { ClientOnly } from "../ClientOnly";
 import { ConvictionScoreCard } from "../dashboard/ConvictionScoreCard";
 import { authGet } from "@/lib/fetchWithAuth";
 import { COMPLIANCE } from "../../lib/compliance";
+import { FeatureGate } from "../billing/FeatureGate";
+import { TierBadge } from "../billing/TierBadge";
 
 type TimeRange = "1D" | "1W" | "1M" | "3M" | "1Y" | "ALL";
 const TIME_RANGES: TimeRange[] = ["1D", "1W", "1M", "3M", "1Y", "ALL"];
@@ -192,35 +194,44 @@ function AIOverviewPanel({ ticker }: { ticker: string }) {
         </div>
       )}
 
-      {/* Outlook */}
-      <div>
-        <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">Outlook</div>
-        <div className="space-y-2">
-          <div className="rounded-md border border-border bg-panel-2 px-3 py-2">
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-1">
-              <span className="font-semibold">BASE</span>
-              <span className="ml-auto">{data.outlook.probabilities.base}%</span>
-            </div>
-            <p className="text-xs leading-relaxed">{data.outlook.base_case}</p>
+      {/* Outlook — bull/bear narrative gated to Signals+ */}
+      <FeatureGate
+        requiredTier="signals"
+        title="Full Bull/Base/Bear Outlook"
+        benefits={["Detailed base, bull, and bear case narratives", "Probability-weighted scenario analysis"]}
+      >
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Outlook</div>
+            <TierBadge tier="signals" />
           </div>
-          <div className="rounded-md border border-risk-on/20 bg-risk-on/5 px-3 py-2">
-            <div className="flex items-center gap-2 text-[10px] text-risk-on mb-1">
-              <TrendingUp size={10} />
-              <span className="font-semibold">BULL</span>
-              <span className="ml-auto">{data.outlook.probabilities.bull}%</span>
+          <div className="space-y-2">
+            <div className="rounded-md border border-border bg-panel-2 px-3 py-2">
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-1">
+                <span className="font-semibold">BASE</span>
+                <span className="ml-auto">{data.outlook.probabilities.base}%</span>
+              </div>
+              <p className="text-xs leading-relaxed">{data.outlook.base_case}</p>
             </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">{data.outlook.bull_case}</p>
-          </div>
-          <div className="rounded-md border border-risk-off/20 bg-risk-off/5 px-3 py-2">
-            <div className="flex items-center gap-2 text-[10px] text-risk-off mb-1">
-              <TrendingDown size={10} />
-              <span className="font-semibold">BEAR</span>
-              <span className="ml-auto">{data.outlook.probabilities.bear}%</span>
+            <div className="rounded-md border border-risk-on/20 bg-risk-on/5 px-3 py-2">
+              <div className="flex items-center gap-2 text-[10px] text-risk-on mb-1">
+                <TrendingUp size={10} />
+                <span className="font-semibold">BULL</span>
+                <span className="ml-auto">{data.outlook.probabilities.bull}%</span>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">{data.outlook.bull_case}</p>
             </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">{data.outlook.bear_case}</p>
+            <div className="rounded-md border border-risk-off/20 bg-risk-off/5 px-3 py-2">
+              <div className="flex items-center gap-2 text-[10px] text-risk-off mb-1">
+                <TrendingDown size={10} />
+                <span className="font-semibold">BEAR</span>
+                <span className="ml-auto">{data.outlook.probabilities.bear}%</span>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">{data.outlook.bear_case}</p>
+            </div>
           </div>
         </div>
-      </div>
+      </FeatureGate>
 
       {/* News */}
       {data.news.length > 0 && (
