@@ -1,3 +1,5 @@
+# Platform/api/app/dependencies.py
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -5,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.services.auth_service import decode_access_token
 from app.models.user import User
+from app.services.plans import PlanTier, is_complimentary_pro
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
@@ -17,6 +20,13 @@ def get_current_user(
     try:
         payload = decode_access_token(token)
     except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token",
+        )
+
+    # Reject refresh tokens used as access tokens
+    if payload.get("type") == "refresh":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication token",
@@ -38,6 +48,19 @@ def get_current_user(
             detail="User not found",
         )
 
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account suspended",
+        )
+
+    # Auto-upgrade complimentary Pro accounts
+    if is_complimentary_pro(user.email) and user.subscription_tier != PlanTier.pro.value:
+        user.subscription_tier = PlanTier.pro.value
+        user.subscription_status = "active"
+        user.subscription_provider = "complimentary"
+        db.commit()
+
     return user
 
 
@@ -49,9 +72,18 @@ def get_optional_user(
         return None
     try:
         payload = decode_access_token(token)
+        if payload.get("type") == "refresh":
+            return None
         user_id = payload.get("sub")
         if not user_id:
             return None
-        return db.query(User).filter(User.id == int(user_id)).first()
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        # Auto-upgrade complimentary Pro accounts
+        if user and is_complimentary_pro(user.email) and user.subscription_tier != PlanTier.pro.value:
+            user.subscription_tier = PlanTier.pro.value
+            user.subscription_status = "active"
+            user.subscription_provider = "complimentary"
+            db.commit()
+        return user
     except Exception:
         return None
