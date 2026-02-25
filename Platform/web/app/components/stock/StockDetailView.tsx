@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, TrendingUp, TrendingDown, Loader2, AlertCircle } from "lucide-react";
+import { ArrowLeft, TrendingUp, TrendingDown, Loader2, AlertCircle, Clock } from "lucide-react";
 import {
   AreaChart,
   Area,
@@ -16,10 +16,10 @@ import { getStockDetail, generateStockChartData } from "../../lib/stockData";
 import { GradeBadge } from "../ui/GradeBadge";
 import { ClientOnly } from "../ClientOnly";
 import { ConvictionScoreCard } from "../dashboard/ConvictionScoreCard";
-import { QuoteBox } from "./QuoteBox";
 import { CandlestickChart } from "./CandlestickChart";
 import { authGet } from "@/lib/fetchWithAuth";
 import { COMPLIANCE } from "../../lib/compliance";
+import type { NormalizedQuote } from "@/lib/market/types";
 import { FeatureGate } from "../billing/FeatureGate";
 import { TierBadge } from "../billing/TierBadge";
 
@@ -274,12 +274,114 @@ function AIOverviewPanel({ ticker }: { ticker: string }) {
   );
 }
 
+function useMarketQuote(ticker: string) {
+  const [quote, setQuote] = useState<NormalizedQuote | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!ticker) return;
+    let canceled = false;
+    setLoading(true);
+    setError(null);
+
+    fetch(`/api/market/quote?symbol=${encodeURIComponent(ticker)}`, { cache: "no-store" })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error ?? "Quote failed");
+        if (!canceled) setQuote(data as NormalizedQuote);
+      })
+      .catch((err) => {
+        if (!canceled) setError(err instanceof Error ? err.message : "Quote failed");
+      })
+      .finally(() => {
+        if (!canceled) setLoading(false);
+      });
+
+    return () => { canceled = true; };
+  }, [ticker]);
+
+  return { quote, loading, error };
+}
+
+function formatAsOfTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  } catch {
+    return "—";
+  }
+}
+
+function LiveQuoteCard({ quote, loading, error }: { quote: NormalizedQuote | null; loading: boolean; error: string | null }) {
+  if (loading) {
+    return (
+      <section className="bt-panel p-4">
+        <div className="bt-panel-title">LIVE QUOTE</div>
+        <div className="mt-4 flex items-center justify-center gap-2 py-4 text-muted-foreground text-sm">
+          <Loader2 size={14} className="animate-spin" />
+          Loading quote...
+        </div>
+      </section>
+    );
+  }
+
+  if (error || !quote) {
+    return (
+      <section className="bt-panel p-4">
+        <div className="bt-panel-title">LIVE QUOTE</div>
+        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+          <AlertCircle size={14} />
+          {error || "Quote unavailable"}
+        </div>
+      </section>
+    );
+  }
+
+  const rows: Array<{ label: string; value: string }> = [];
+  if (quote.open != null) rows.push({ label: "Open", value: formatCurrency(quote.open) });
+  if (quote.high != null) rows.push({ label: "High", value: formatCurrency(quote.high) });
+  if (quote.low != null) rows.push({ label: "Low", value: formatCurrency(quote.low) });
+  if (quote.prevClose != null) rows.push({ label: "Prev Close", value: formatCurrency(quote.prevClose) });
+
+  return (
+    <section className="bt-panel p-4">
+      <div className="flex items-center justify-between">
+        <div className="bt-panel-title">LIVE QUOTE</div>
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-risk-on animate-pulse" />
+          {quote.source}
+          {quote.isDelayed && " (Delayed)"}
+        </div>
+      </div>
+      <div className="mt-3 space-y-2">
+        {rows.map((r) => (
+          <div key={r.label} className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">{r.label}</span>
+            <span className="font-mono">{r.value}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 pt-2 border-t border-border flex items-center gap-1.5 text-[10px] text-muted-foreground">
+        <Clock size={10} />
+        As of {formatAsOfTime(quote.asOf)}
+      </div>
+    </section>
+  );
+}
+
 export function StockDetailView({ ticker }: { ticker: string }) {
   const stock = useMemo(() => getStockDetail(ticker), [ticker]);
   const [range, setRange] = useState<TimeRange>("1M");
+  const { quote, loading: quoteLoading, error: quoteError } = useMarketQuote(ticker);
 
-  const changeColor = stock.change >= 0 ? "text-risk-on" : "text-risk-off";
-  const changeSign = stock.change >= 0 ? "+" : "";
+  // Use live quote when available, fall back to mock data
+  const price = quote?.price ?? stock.price;
+  const change = quote?.change ?? stock.change;
+  const changePct = quote?.changePercent ?? stock.changePct;
+
+  const changeColor = change >= 0 ? "text-risk-on" : "text-risk-off";
+  const changeSign = change >= 0 ? "+" : "";
 
   return (
     <div className="space-y-6">
@@ -294,12 +396,26 @@ export function StockDetailView({ ticker }: { ticker: string }) {
             <GradeBadge grade={stock.grade} />
           </div>
           <div className="text-muted-foreground text-sm">{stock.companyName} &middot; {stock.sector}</div>
-          {stock.price > 0 && (
-            <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-3xl font-semibold font-mono">{formatCurrency(stock.price)}</span>
+          {price > 0 && (
+            <div className="mt-1 flex items-baseline gap-2 flex-wrap">
+              <span className="text-3xl font-semibold font-mono">{formatCurrency(price)}</span>
               <span className={`text-lg font-mono ${changeColor}`}>
-                {changeSign}{formatCurrency(stock.change)} ({changeSign}{stock.changePct.toFixed(2)}%)
+                {changeSign}{formatCurrency(change)} ({changeSign}{changePct.toFixed(2)}%)
               </span>
+              {quoteLoading && (
+                <Loader2 size={14} className="animate-spin text-muted-foreground" />
+              )}
+              {quote?.isDelayed && !quoteLoading && (
+                <span className="text-[10px] text-muted-foreground bg-white/5 border border-white/10 rounded px-1.5 py-0.5">
+                  Delayed
+                </span>
+              )}
+            </div>
+          )}
+          {quote && (
+            <div className="mt-0.5 text-[10px] text-muted-foreground flex items-center gap-1.5">
+              <Clock size={10} />
+              As of {formatAsOfTime(quote.asOf)} &middot; {quote.source}
             </div>
           )}
         </div>
@@ -360,8 +476,8 @@ export function StockDetailView({ ticker }: { ticker: string }) {
 
         {/* Right column */}
         <div className="lg:col-span-4 space-y-4">
-          {/* Live Quote — Finnhub-powered, auto-refreshes every 15s */}
-          <QuoteBox ticker={ticker} />
+          {/* Live Quote — from normalized market API */}
+          <LiveQuoteCard quote={quote} loading={quoteLoading} error={quoteError} />
 
           {/* Conviction Score — fetched from backend */}
           <ConvictionScoreCard ticker={ticker} />

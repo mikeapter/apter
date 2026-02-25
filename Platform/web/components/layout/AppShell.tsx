@@ -8,6 +8,7 @@ import { getStoredUser, getToken, setStoredUser, logout as clearAuth } from "@/l
 import { apiGet } from "@/lib/api";
 import type { StoredUser } from "@/lib/auth";
 import Sidebar from "./Sidebar";
+import MarketSearch from "@/app/components/market/MarketSearch";
 
 export type AppShellProps = {
   children: React.ReactNode;
@@ -143,9 +144,13 @@ export default function AppShell({ children, className }: AppShellProps) {
             </button>
           )}
 
-          <div className="text-sm font-semibold tracking-wide">{greeting}</div>
+          <div className="text-sm font-semibold tracking-wide shrink-0">{greeting}</div>
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="hidden sm:flex flex-1 justify-center px-4">
+            <MarketSearch />
+          </div>
+
+          <div className="ml-auto flex items-center gap-3 shrink-0">
             <div className="hidden sm:block text-xs text-white/60">Signals Only</div>
             {isLoggedIn ? (
               <>
