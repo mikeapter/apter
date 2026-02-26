@@ -12,6 +12,7 @@ from app.routes import subscriptions, admin, profile
 from app.routes import stripe as stripe_routes
 from app.routes import scores, quotes, ai, health, auth_refresh
 from app.routes import ai_assistant
+from app.routes import rating as rating_routes
 from app.routes import password_reset
 from app.routes import data as data_routes
 from app.routes import market as market_routes
@@ -38,7 +39,7 @@ def _create_app() -> FastAPI:
     """
     kwargs = dict(
         title="Apter Financial API",
-        version="0.2.0",
+        version="0.3.0",
         openapi_version="3.1.0",
     )
 
@@ -57,7 +58,7 @@ app = _create_app()
 def _startup() -> None:
     init_db()
     finnhub_log_status()
-    logger.info("Apter Financial API started — v0.2.0 (env=%s, docs=%s)", "prod" if IS_PRODUCTION else "dev", ENABLE_DOCS)
+    logger.info("Apter Financial API started — v0.3.0 (env=%s, docs=%s)", "prod" if IS_PRODUCTION else "dev", ENABLE_DOCS)
 
 
 # ── Middleware (applied in reverse order — last added runs first) ─────────────
@@ -83,12 +84,12 @@ app.add_middleware(
     expose_headers=["X-Request-ID"],
 )
 
-# ─── Mount static files for avatar uploads ───
+# Mount static files for avatar uploads
 uploads_dir = os.path.join(os.path.dirname(__file__), "..", "uploads")
 os.makedirs(uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
-# ─── Routers ───
+# Routers
 app.include_router(health.router)
 app.include_router(system.router)
 app.include_router(auth.router)
@@ -106,7 +107,8 @@ app.include_router(profile.router)
 app.include_router(scores.router)
 app.include_router(quotes.router)
 app.include_router(ai.router)              # /api/chat + /api/stocks/{ticker}/ai-overview
-app.include_router(ai_assistant.router)     # /api/ai/chat, /api/ai/overview, /api/ai/feedback
+app.include_router(ai_assistant.router)     # /api/ai/chat, /api/ai/overview, /api/ai/intelligence/*
+app.include_router(rating_routes.router)    # /api/rating/{ticker}
 app.include_router(password_reset.router)  # /auth/forgot-password, /auth/reset-password
 app.include_router(data_routes.router)      # /api/data/* tool endpoints
 app.include_router(market_routes.router)    # /api/market/* Finnhub endpoints
