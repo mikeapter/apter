@@ -1,14 +1,14 @@
-"""Structured response schemas for AI service outputs."""
+"""Structured response schemas for Apter Intelligence service outputs."""
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
 
 class AIResponseSchema(BaseModel):
-    """Structured AI response — every field must be non-RIA compliant."""
+    """Structured AI response -- every field must be non-RIA compliant."""
 
     summary: str = Field(..., description="One-paragraph factual summary")
     data_used: List[str] = Field(
@@ -60,9 +60,9 @@ class FeedbackRequest(BaseModel):
 
 
 SAFE_FALLBACK = AIResponseSchema(
-    summary="I can pull real-time quotes, fundamentals, financials, technicals, and news for any ticker. Try asking about a specific stock or market topic.",
+    summary="Apter Intelligence is available to analyze stocks, market conditions, and financial metrics. Ask about a specific ticker or market topic for a data-driven breakdown.",
     data_used=["Quotes", "Fundamentals", "Financials", "Technicals", "News"],
-    explanation="Ask me things like 'Break down AAPL earnings' or 'Compare MSFT vs GOOG revenue growth' — I'll fetch the relevant data and walk you through it.",
+    explanation="Try questions like 'Break down AAPL earnings' or 'Compare MSFT vs GOOG revenue growth' for structured, data-driven analysis.",
     watchlist_items=[],
     risk_flags=[
         "All investing involves risk including potential loss of principal"
@@ -75,3 +75,71 @@ SAFE_FALLBACK = AIResponseSchema(
     disclaimer="Not investment advice.",
     citations=[],
 )
+
+
+# ---------------------------------------------------------------------------
+# Stock Intelligence Brief schema
+# ---------------------------------------------------------------------------
+
+
+class RiskTagItem(BaseModel):
+    category: str = Field(..., description="e.g. Competitive, Regulatory, Margin, Macro, Execution")
+    level: str = Field(..., description="Low | Moderate | Elevated")
+
+
+class StockIntelligenceBrief(BaseModel):
+    ticker: str
+    executive_summary: str = Field(..., description="5-8 sentence institutional-grade summary")
+    key_drivers: List[str] = Field(default_factory=list)
+    risk_tags: List[RiskTagItem] = Field(default_factory=list)
+    regime_context: str = Field(default="Neutral", description="Risk-On | Neutral | Risk-Off")
+    what_to_monitor: List[str] = Field(default_factory=list)
+    snapshot: Dict[str, Optional[str]] = Field(default_factory=dict)
+    as_of: str = ""
+    disclaimer: str = "For informational/educational use only. Not investment advice."
+    data_sources: List[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Market Intelligence Brief schema
+# ---------------------------------------------------------------------------
+
+
+class RiskDashboard(BaseModel):
+    regime: str = Field(default="Neutral", description="Risk-On | Neutral | Risk-Off")
+    volatility_context: str = ""
+    breadth_context: str = ""
+
+
+class MarketIntelligenceBrief(BaseModel):
+    executive_summary: str = Field(..., description="Short paragraph market overview")
+    risk_dashboard: RiskDashboard = Field(default_factory=RiskDashboard)
+    catalysts: List[str] = Field(default_factory=list)
+    what_changed: List[str] = Field(default_factory=list, description="Max 3 bullets")
+    as_of: str = ""
+    disclaimer: str = "For informational/educational use only. Not investment advice."
+    data_sources: List[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Apter Rating schema
+# ---------------------------------------------------------------------------
+
+
+class RatingComponent(BaseModel):
+    score: float = Field(ge=0, le=10)
+    weight: float
+    drivers: List[str] = Field(default_factory=list)
+
+
+class AptRatingResponse(BaseModel):
+    ticker: str
+    rating: float = Field(ge=0, le=10)
+    band: str
+    components: Dict[str, RatingComponent]
+    as_of: str = ""
+    disclaimer: str = (
+        "Apter Rating (1-10) is a proprietary composite research score derived "
+        "from quantitative financial metrics, market structure indicators, and "
+        "risk analysis. Informational only. Not investment advice."
+    )

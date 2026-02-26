@@ -13,6 +13,7 @@ from app.routes import subscriptions, admin, profile
 from app.routes import stripe as stripe_routes
 from app.routes import scores, quotes, ai, health, auth_refresh
 from app.routes import ai_assistant
+from app.routes import rating as rating_routes
 from app.routes import data as data_routes
 from app.db.init_db import init_db
 
@@ -47,7 +48,7 @@ def _parse_cors_origins() -> List[str]:
 
 app = FastAPI(
     title="Apter Financial API",
-    version="0.2.0",
+    version="0.3.0",
     openapi_version="3.1.0",
 )
 
@@ -55,7 +56,7 @@ app = FastAPI(
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
-    logger.info("Apter Financial API started — v0.2.0")
+    logger.info("Apter Financial API started -- v0.3.0")
 
 
 allowed_origins = _parse_cors_origins()
@@ -68,12 +69,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ─── Mount static files for avatar uploads ───
+# Mount static files for avatar uploads
 uploads_dir = os.path.join(os.path.dirname(__file__), "..", "uploads")
 os.makedirs(uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
-# ─── Routers ───
+# Routers
 app.include_router(health.router)
 app.include_router(system.router)
 app.include_router(auth.router)
@@ -91,5 +92,6 @@ app.include_router(profile.router)
 app.include_router(scores.router)
 app.include_router(quotes.router)
 app.include_router(ai.router)              # /api/chat + /api/stocks/{ticker}/ai-overview
-app.include_router(ai_assistant.router)     # /api/ai/chat, /api/ai/overview, /api/ai/feedback
+app.include_router(ai_assistant.router)     # /api/ai/chat, /api/ai/overview, /api/ai/intelligence/*
+app.include_router(rating_routes.router)    # /api/rating/{ticker}
 app.include_router(data_routes.router)      # /api/data/* tool endpoints

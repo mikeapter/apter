@@ -2,7 +2,16 @@
 
 import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, TrendingUp, TrendingDown, Loader2, AlertCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  TrendingUp,
+  TrendingDown,
+  Loader2,
+  AlertCircle,
+  Database,
+  ShieldAlert,
+  Activity,
+} from "lucide-react";
 import {
   AreaChart,
   Area,
@@ -16,7 +25,12 @@ import { getStockDetail, generateStockChartData } from "../../lib/stockData";
 import { GradeBadge } from "../ui/GradeBadge";
 import { ClientOnly } from "../ClientOnly";
 import { ConvictionScoreCard } from "../dashboard/ConvictionScoreCard";
-import { authGet } from "@/lib/fetchWithAuth";
+import {
+  fetchStockIntelligence,
+  fetchAptRating,
+  type StockIntelligenceBrief,
+  type AptRatingResponse,
+} from "../../lib/api/ai";
 import { COMPLIANCE } from "../../lib/compliance";
 
 type TimeRange = "1D" | "1W" | "1M" | "3M" | "1Y" | "ALL";
@@ -25,6 +39,8 @@ const TIME_RANGES: TimeRange[] = ["1D", "1W", "1M", "3M", "1Y", "ALL"];
 function formatCurrency(n: number): string {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
 }
+
+/* ─── Price Chart ─── */
 
 function PriceChart({ ticker, range }: { ticker: string; range: TimeRange }) {
   const data = useMemo(() => generateStockChartData(ticker, range), [ticker, range]);
@@ -76,32 +92,10 @@ function PriceChart({ ticker, range }: { ticker: string; range: TimeRange }) {
   );
 }
 
-/* ─── AI Overview types ─── */
-type AIOverview = {
-  ticker: string;
-  as_of: string;
-  snapshot: { price: number; day_change_pct: number; volume: number | null };
-  performance: Record<string, number | null>;
-  drivers: string[];
-  outlook: {
-    base_case: string;
-    bull_case: string;
-    bear_case: string;
-    probabilities: { base: number; bull: number; bear: number };
-  };
-  news: { headline: string; source: string; published_at: string; impact: string }[];
-  what_to_watch: string[];
-  disclaimer: string;
-};
+/* ─── Stock Intelligence Brief Panel ─── */
 
-function impactColor(impact: string) {
-  if (impact === "positive") return "text-risk-on";
-  if (impact === "negative") return "text-risk-off";
-  return "text-muted-foreground";
-}
-
-function AIOverviewPanel({ ticker }: { ticker: string }) {
-  const [data, setData] = useState<AIOverview | null>(null);
+function StockIntelligencePanel({ ticker }: { ticker: string }) {
+  const [data, setData] = useState<StockIntelligenceBrief | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -110,20 +104,16 @@ function AIOverviewPanel({ ticker }: { ticker: string }) {
     setLoading(true);
     setError(null);
 
-    authGet<AIOverview>(`/api/stocks/${encodeURIComponent(ticker)}/ai-overview`).then((res) => {
-      if (res.ok) {
-        setData(res.data);
-      } else {
-        setError(res.error || "Failed to load AI overview");
-      }
-      setLoading(false);
-    });
+    fetchStockIntelligence(ticker)
+      .then((res) => setData(res))
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load intelligence brief"))
+      .finally(() => setLoading(false));
   }, [ticker]);
 
   if (loading) {
     return (
       <section className="bt-panel p-4">
-        <div className="bt-panel-title">AI PERFORMANCE OVERVIEW</div>
+        <div className="bt-panel-title">STOCK INTELLIGENCE BRIEF</div>
         <div className="mt-4 flex items-center justify-center gap-2 py-8 text-muted-foreground text-sm">
           <Loader2 size={14} className="animate-spin" />
           Generating analysis...
@@ -135,54 +125,62 @@ function AIOverviewPanel({ ticker }: { ticker: string }) {
   if (error || !data) {
     return (
       <section className="bt-panel p-4">
-        <div className="bt-panel-title">AI PERFORMANCE OVERVIEW</div>
+        <div className="bt-panel-title">STOCK INTELLIGENCE BRIEF</div>
         <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
           <AlertCircle size={14} />
-          {error || "Overview unavailable"}
+          {error || "Brief unavailable"}
         </div>
       </section>
     );
   }
 
-  const perf = data.performance;
-  const perfEntries = Object.entries(perf).filter(([, v]) => v !== null) as [string, number][];
+  const snapshotEntries = Object.entries(data.snapshot).filter(
+    ([, v]) => v !== null && v !== undefined,
+  );
 
   return (
     <section className="bt-panel p-4 space-y-4">
-      <div className="bt-panel-title">AI PERFORMANCE OVERVIEW</div>
+      <div className="flex items-center justify-between">
+        <div className="bt-panel-title">STOCK INTELLIGENCE BRIEF</div>
+        {data.cached && (
+          <span className="text-[10px] text-muted-foreground bg-panel px-1.5 py-0.5 rounded">cached</span>
+        )}
+      </div>
 
-      {/* Snapshot */}
-      <p className="text-sm text-muted-foreground leading-relaxed">
-        {data.ticker} is trading at {formatCurrency(data.snapshot.price)},{" "}
-        <span className={data.snapshot.day_change_pct >= 0 ? "text-risk-on" : "text-risk-off"}>
-          {data.snapshot.day_change_pct >= 0 ? "+" : ""}{data.snapshot.day_change_pct.toFixed(2)}%
-        </span>{" "}
-        today.
-      </p>
+      {/* Data sources */}
+      {data.data_sources?.length > 0 && (
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-panel rounded px-2 py-1">
+          <Database size={10} className="shrink-0" />
+          <span>Data sources: {data.data_sources.join(", ")}</span>
+        </div>
+      )}
 
-      {/* Performance windows */}
-      {perfEntries.length > 0 && (
+      {/* Executive summary */}
+      <p className="text-sm leading-relaxed">{data.executive_summary}</p>
+
+      {/* Quantitative snapshot */}
+      {snapshotEntries.length > 0 && (
         <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">Performance</div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">
+            Quantitative Snapshot
+          </div>
           <div className="flex flex-wrap gap-3">
-            {perfEntries.map(([k, v]) => (
-              <div key={k} className="rounded-md border border-border bg-panel-2 px-2.5 py-1.5 text-center">
-                <div className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground">{k}</div>
-                <div className={`text-sm font-mono font-medium ${v >= 0 ? "text-risk-on" : "text-risk-off"}`}>
-                  {v >= 0 ? "+" : ""}{v.toFixed(1)}%
-                </div>
+            {snapshotEntries.map(([k, v]) => (
+              <div key={k} className="rounded-md border border-border bg-panel-2 px-2.5 py-1.5 text-center min-w-[70px]">
+                <div className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground">{k.replace(/_/g, " ")}</div>
+                <div className="text-sm font-mono font-medium mt-0.5">{v}</div>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Drivers */}
-      {data.drivers.length > 0 && (
+      {/* Key Drivers */}
+      {data.key_drivers?.length > 0 && (
         <div>
           <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">Key Drivers</div>
           <ul className="space-y-1.5">
-            {data.drivers.map((d, i) => (
+            {data.key_drivers.map((d, i) => (
               <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
                 <TrendingUp size={12} className="text-risk-on mt-0.5 shrink-0" />
                 {d}
@@ -192,74 +190,165 @@ function AIOverviewPanel({ ticker }: { ticker: string }) {
         </div>
       )}
 
-      {/* Outlook */}
-      <div>
-        <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">Outlook</div>
-        <div className="space-y-2">
-          <div className="rounded-md border border-border bg-panel-2 px-3 py-2">
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-1">
-              <span className="font-semibold">BASE</span>
-              <span className="ml-auto">{data.outlook.probabilities.base}%</span>
-            </div>
-            <p className="text-xs leading-relaxed">{data.outlook.base_case}</p>
-          </div>
-          <div className="rounded-md border border-risk-on/20 bg-risk-on/5 px-3 py-2">
-            <div className="flex items-center gap-2 text-[10px] text-risk-on mb-1">
-              <TrendingUp size={10} />
-              <span className="font-semibold">BULL</span>
-              <span className="ml-auto">{data.outlook.probabilities.bull}%</span>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">{data.outlook.bull_case}</p>
-          </div>
-          <div className="rounded-md border border-risk-off/20 bg-risk-off/5 px-3 py-2">
-            <div className="flex items-center gap-2 text-[10px] text-risk-off mb-1">
-              <TrendingDown size={10} />
-              <span className="font-semibold">BEAR</span>
-              <span className="ml-auto">{data.outlook.probabilities.bear}%</span>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">{data.outlook.bear_case}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* News */}
-      {data.news.length > 0 && (
+      {/* Risk Tags */}
+      {data.risk_tags?.length > 0 && (
         <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">Recent News</div>
-          <div className="space-y-2">
-            {data.news.map((n, i) => (
-              <div key={i} className="border-b border-border pb-2 last:border-0 last:pb-0">
-                <div className="text-xs leading-snug">{n.headline}</div>
-                <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
-                  <span>{n.source}</span>
-                  <span>&middot;</span>
-                  <span className={impactColor(n.impact)}>{n.impact}</span>
-                </div>
-              </div>
-            ))}
+          <div className="flex items-center gap-1 mb-2">
+            <ShieldAlert size={12} className="text-orange-400" />
+            <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Risk Tags</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {data.risk_tags.map((tag, i) => {
+              const levelColor =
+                tag.level === "Elevated" ? "border-orange-400/40 text-orange-400" :
+                tag.level === "Moderate" ? "border-yellow-400/40 text-yellow-400" :
+                "border-border text-muted-foreground";
+              return (
+                <span
+                  key={i}
+                  className={`text-[10px] border rounded px-2 py-0.5 ${levelColor}`}
+                >
+                  {tag.category}: {tag.level}
+                </span>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* What to watch */}
-      {data.what_to_watch.length > 0 && (
+      {/* Regime Context */}
+      {data.regime_context && (
         <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">What to Watch</div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-1">Regime Context</div>
+          <p className="text-xs text-muted-foreground leading-relaxed">{data.regime_context}</p>
+        </div>
+      )}
+
+      {/* What to Monitor */}
+      {data.what_to_monitor?.length > 0 && (
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">What to Monitor</div>
           <ul className="space-y-1">
-            {data.what_to_watch.map((w, i) => (
-              <li key={i} className="text-xs text-muted-foreground">• {w}</li>
+            {data.what_to_monitor.map((w, i) => (
+              <li key={i} className="text-xs text-muted-foreground">&bull; {w}</li>
             ))}
           </ul>
         </div>
       )}
 
-      {/* Disclaimer */}
+      {/* Timestamp + Disclaimer */}
       <div className="text-[10px] text-muted-foreground pt-2 border-t border-border">
+        {data.as_of && <span className="mr-2">As of {data.as_of}.</span>}
         {COMPLIANCE.NOT_INVESTMENT_ADVICE}
       </div>
     </section>
   );
 }
+
+/* ─── Apter Rating Card ─── */
+
+function ratingColor(rating: number): string {
+  if (rating >= 8) return "text-risk-on";
+  if (rating >= 6) return "text-risk-on/80";
+  if (rating >= 4) return "text-yellow-400";
+  return "text-risk-off";
+}
+
+function AptRatingCard({ ticker }: { ticker: string }) {
+  const [data, setData] = useState<AptRatingResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!ticker) return;
+    setLoading(true);
+    setError(null);
+
+    fetchAptRating(ticker)
+      .then((res) => setData(res))
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load rating"))
+      .finally(() => setLoading(false));
+  }, [ticker]);
+
+  if (loading) {
+    return (
+      <section className="bt-panel p-4">
+        <div className="bt-panel-title">APTER RATING</div>
+        <div className="mt-4 flex items-center justify-center gap-2 py-6 text-muted-foreground text-sm">
+          <Loader2 size={14} className="animate-spin" />
+          Computing...
+        </div>
+      </section>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <section className="bt-panel p-4">
+        <div className="bt-panel-title">APTER RATING</div>
+        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+          <AlertCircle size={14} />
+          {error || "Rating unavailable"}
+        </div>
+      </section>
+    );
+  }
+
+  const components = [
+    { label: "Growth", ...data.components.growth },
+    { label: "Profitability", ...data.components.profitability },
+    { label: "Balance Sheet", ...data.components.balance_sheet },
+    { label: "Momentum", ...data.components.momentum },
+    { label: "Risk", ...data.components.risk },
+  ];
+
+  return (
+    <section className="bt-panel p-4 space-y-3">
+      <div className="bt-panel-title">APTER RATING</div>
+
+      {/* Headline score */}
+      <div className="flex items-center gap-3">
+        <div className={`text-4xl font-semibold font-mono ${ratingColor(data.rating)}`}>
+          {data.rating.toFixed(1)}
+        </div>
+        <div>
+          <div className="text-sm font-medium">{data.band}</div>
+          <div className="text-[10px] text-muted-foreground">{data.ticker} composite score</div>
+        </div>
+      </div>
+
+      {/* Component bars */}
+      <div className="space-y-2">
+        {components.map((c) => (
+          <div key={c.label}>
+            <div className="flex items-center justify-between text-[10px] mb-0.5">
+              <span className="text-muted-foreground">{c.label} ({(c.weight * 100).toFixed(0)}%)</span>
+              <span className="font-mono font-medium">{c.score.toFixed(1)}</span>
+            </div>
+            <div className="h-1.5 bg-panel rounded-full overflow-hidden">
+              <div
+                className="h-full bg-foreground/30 rounded-full transition-all"
+                style={{ width: `${(c.score / 10) * 100}%` }}
+              />
+            </div>
+            {c.drivers?.length > 0 && (
+              <div className="mt-0.5 text-[10px] text-muted-foreground/70">
+                {c.drivers.join(" | ")}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Disclaimer */}
+      <div className="pt-2 border-t border-border">
+        <p className="text-[10px] text-muted-foreground/60">{COMPLIANCE.APTER_RATING_DISCLAIMER}</p>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Main StockDetailView ─── */
 
 export function StockDetailView({ ticker }: { ticker: string }) {
   const stock = useMemo(() => getStockDetail(ticker), [ticker]);
@@ -320,8 +409,8 @@ export function StockDetailView({ ticker }: { ticker: string }) {
             <PriceChart ticker={ticker} range={range} />
           </section>
 
-          {/* AI Overview — fetched from backend */}
-          <AIOverviewPanel ticker={ticker} />
+          {/* Stock Intelligence Brief — replaces old AI Overview panel */}
+          <StockIntelligencePanel ticker={ticker} />
 
           {/* Decision Support */}
           <section className="bt-panel p-4">
@@ -344,7 +433,10 @@ export function StockDetailView({ ticker }: { ticker: string }) {
 
         {/* Right column */}
         <div className="lg:col-span-4 space-y-4">
-          {/* Conviction Score — fetched from backend */}
+          {/* Apter Rating — new quantitative composite */}
+          <AptRatingCard ticker={ticker} />
+
+          {/* Conviction Score — existing system */}
           <ConvictionScoreCard ticker={ticker} />
 
           {/* News (from local stock data as fallback) */}
