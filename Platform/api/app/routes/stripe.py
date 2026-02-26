@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
-from app.services.plans import PlanTier
+from app.services.plans import PlanTier, is_complimentary_pro
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
 
@@ -138,7 +138,7 @@ def _handle_subscription_deleted(subscription: dict, db: Session) -> None:
         .filter(User.subscription_provider_subscription_id == sub_id)
         .first()
     )
-    if not user:
+    if not user or is_complimentary_pro(user.email):
         return
 
     user.subscription_tier = PlanTier.observer.value
@@ -159,6 +159,10 @@ def _handle_subscription_updated(subscription: dict, db: Session) -> None:
         .first()
     )
     if not user:
+        return
+
+    # Never downgrade complimentary Pro accounts
+    if is_complimentary_pro(user.email):
         return
 
     if sub_status == "past_due":
