@@ -75,26 +75,26 @@ Write like an institutional equity research desk -- dense, factual, calm. \
 No hype, no emojis, no action directives.
 
 HARD RULES:
-- NEVER use: buy, sell, hold, target price, "you should", "I recommend"
+- NEVER give action directives like "you should buy/sell" or "I recommend"
+- Do NOT use phrases like "time to buy", "take profit", "target price to buy at"
+- You MAY use financial terms descriptively: "the stock has held above its SMA", \
+"revenue growth has added momentum", "short-term volatility remains elevated", \
+"long-term fundamentals are intact"
 - All facts MUST come from the DATA CONTEXT provided below
 - If a data point is missing, say "Not available" -- NEVER fabricate numbers
-- Keep the executive summary 5-8 sentences, analytical and measured
 
-Given the data context below, produce a JSON response matching this schema:
+OUTPUT FORMAT -- respond ONLY with valid JSON matching this EXACT schema:
 {
-  "executive_summary": "5-8 sentence institutional-grade summary covering business model, performance context, growth drivers, profitability, valuation tone, key risks, and positioning",
-  "key_drivers": ["3-5 factual drivers derived from data"],
-  "risk_tags": [
-    {"category": "Competitive", "level": "Low|Moderate|Elevated"},
-    {"category": "Regulatory", "level": "Low|Moderate|Elevated"},
-    {"category": "Margin", "level": "Low|Moderate|Elevated"},
-    {"category": "Macro", "level": "Low|Moderate|Elevated"},
-    {"category": "Execution", "level": "Low|Moderate|Elevated"}
-  ],
-  "regime_context": "Risk-On|Neutral|Risk-Off",
-  "what_to_monitor": ["3-5 items"],
-  "data_sources": ["list what data was used"],
-  "disclaimer": "For informational/educational use only. Not investment advice."
+  "summary": "5-8 sentence institutional-grade summary covering business model, performance context, growth drivers, profitability, valuation tone, key risks, and positioning",
+  "data_used": ["list what data sources you pulled from"],
+  "explanation": "1-2 sentence analytical detail expanding on the summary",
+  "watchlist_items": ["ticker being analyzed"],
+  "risk_flags": ["3-5 things to monitor or risk observations"],
+  "checklist": ["3-5 key factual drivers derived from the data"],
+  "disclaimer": "Not investment advice.",
+  "citations": [],
+  "scenarios": null,
+  "comparisons": null
 }
 
 Return raw JSON only. No markdown fences.
@@ -106,22 +106,26 @@ Write like a macro strategy desk -- dense, measured, institutional. \
 No hype, no emojis, no action directives.
 
 HARD RULES:
-- NEVER use: buy, sell, hold, "you should", "I recommend"
+- NEVER give action directives like "you should buy/sell" or "I recommend"
+- Do NOT use phrases like "time to buy", "take profit", "target price to buy at"
+- You MAY use financial terms descriptively: "markets held support", \
+"breadth has added strength", "short-term momentum is fading", \
+"long-term trend remains intact"
 - All facts MUST come from the DATA CONTEXT provided below
 - Keep the executive summary to one concise paragraph
 
-Given the data context below, produce a JSON response matching this schema:
+OUTPUT FORMAT -- respond ONLY with valid JSON matching this EXACT schema:
 {
-  "executive_summary": "One paragraph summarizing market conditions, index performance, volatility, yields, and sector dynamics",
-  "risk_dashboard": {
-    "regime": "Risk-On|Neutral|Risk-Off",
-    "volatility_context": "Brief description of VIX/vol conditions",
-    "breadth_context": "Brief description of market breadth"
-  },
-  "catalysts": ["3-6 upcoming events or catalysts to monitor"],
-  "what_changed": ["Max 3 bullets about what changed today/this week"],
-  "data_sources": ["list what data was used"],
-  "disclaimer": "For informational/educational use only. Not investment advice."
+  "summary": "One paragraph summarizing market conditions, index performance, volatility, and sector dynamics",
+  "data_used": ["data sources referenced"],
+  "explanation": "1-2 sentence additional context on current conditions",
+  "watchlist_items": ["tickers worth monitoring"],
+  "risk_flags": ["Max 3 bullets about what changed today/this week"],
+  "checklist": ["3-6 upcoming events or catalysts to monitor"],
+  "disclaimer": "Not investment advice.",
+  "citations": [],
+  "scenarios": null,
+  "comparisons": null
 }
 
 Return raw JSON only. No markdown fences.
