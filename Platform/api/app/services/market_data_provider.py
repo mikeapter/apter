@@ -6,7 +6,7 @@ Design goals:
 - Compute change and change_percent from price & previous_close.
 - Validate all numeric values.
 - Provide timestamps and structured errors.
-- Prefer RapidAPI Yahoo Finance if key present; otherwise use public query1 endpoint.
+- Prefer Finnhub (if FINNHUB_API_KEY set), then RapidAPI Yahoo Finance, then public Yahoo.
 """
 
 from __future__ import annotations
@@ -291,8 +291,85 @@ class YahooFinanceProvider:
         return quotes, errors
 
 
+# ─── Finnhub provider ───────────────────────────────────────────────────────
+
+class FinnhubProvider:
+    """
+    Uses the existing Finnhub client (app.services.finnhub.client).
+    Fetches quotes in parallel via asyncio.gather.
+    Finnhub does not support ^VIX — those are silently skipped with an error entry.
+    """
+
+    async def quote(
+        self, symbols: List[str],
+    ) -> Tuple[Dict[str, Quote], List[QuoteError]]:
+        from app.services.finnhub.client import get_quote as finnhub_get_quote, FinnhubError
+
+        symbols = [s.strip().upper() for s in symbols if s and s.strip()]
+        if not symbols:
+            return {}, [QuoteError(symbol="*", error="No symbols provided")]
+
+        quotes: Dict[str, Quote] = {}
+        errors: List[QuoteError] = []
+
+        async def _fetch_one(sym: str) -> None:
+            # Finnhub doesn't support index symbols like ^VIX
+            if sym.startswith("^"):
+                errors.append(QuoteError(symbol=sym, error="Index symbols not supported by Finnhub"))
+                return
+            try:
+                data = await finnhub_get_quote(sym)
+                price = data.get("price")
+                prev = data.get("prev_close")
+
+                if not _is_finite_number(price) or not _is_finite_number(prev):
+                    errors.append(QuoteError(symbol=sym, error="Missing/invalid price or previous close"))
+                    return
+
+                price_f = float(price)
+                prev_f = float(prev)
+                chg, pct = _compute_change(price_f, prev_f)
+                day_high = _to_float_or_none(data.get("high"))
+                day_low = _to_float_or_none(data.get("low"))
+
+                ts = data.get("ts")
+                if ts and _is_finite_number(ts):
+                    timestamp_utc = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(ts)))
+                else:
+                    timestamp_utc = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+                quotes[sym] = Quote(
+                    symbol=sym,
+                    price=price_f,
+                    previous_close=prev_f,
+                    change=float(chg),
+                    change_percent=float(pct),
+                    day_high=day_high,
+                    day_low=day_low,
+                    timestamp_utc=timestamp_utc,
+                )
+            except FinnhubError as exc:
+                errors.append(QuoteError(symbol=sym, error=f"Finnhub error: {exc.detail}"))
+            except Exception as exc:
+                errors.append(QuoteError(symbol=sym, error=str(exc)))
+
+        # Fetch all symbols concurrently
+        await asyncio.gather(*[_fetch_one(sym) for sym in symbols])
+        return quotes, errors
+
+
 # ─── Factory ────────────────────────────────────────────────────────────────
 
 def get_market_data_provider() -> MarketDataProvider:
-    """Return the configured market data provider. Easy to swap later."""
+    """
+    Return the best available provider.
+    Priority: Finnhub (if API key set) > Yahoo Finance (RapidAPI or public).
+    """
+    from app.services.finnhub.config import is_configured as finnhub_is_configured
+
+    if finnhub_is_configured():
+        logger.info("Market brief provider: Finnhub")
+        return FinnhubProvider()
+
+    logger.info("Market brief provider: Yahoo Finance")
     return YahooFinanceProvider()
