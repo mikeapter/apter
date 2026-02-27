@@ -1,11 +1,14 @@
 """
 Market Data Service — Single source of truth for all quote/price data.
 
-Provides fetch_quote() and fetch_quotes() with:
-- Provider adapter layer (swap vendors later)
-- Symbol normalization (BRK.B / BRK-B)
-- Cache rules per session type
-- Structured error responses
+Backward-compatible re-exports from the original market_data.py module.
+All existing imports (fetch_quote, fetch_quotes, normalize_symbol, etc.)
+continue to work unchanged.
+
+New code should import from submodules:
+- app.services.market_data.providers
+- app.services.market_data.compute_metrics
+- app.services.market_data.schemas
 """
 
 from __future__ import annotations
@@ -49,7 +52,6 @@ _cache_ttl_closed = 300
 def _is_market_open() -> str:
     """Rough market session detection. Returns REGULAR, AFTER_HOURS, PRE_MARKET, or CLOSED."""
     now = datetime.now(timezone.utc)
-    # NYSE: 9:30 - 16:00 ET = 14:30 - 21:00 UTC (without DST adjustment)
     hour = now.hour
     weekday = now.weekday()
 
@@ -76,29 +78,30 @@ def _cache_ttl() -> int:
 # ─── Internal stock data (MVP fallback) ───
 
 _STOCK_DB: Dict[str, dict] = {
-    "AAPL": {"price": 234.56, "change": 3.21, "change_pct": 1.39, "name": "Apple Inc."},
-    "MSFT": {"price": 428.90, "change": 5.67, "change_pct": 1.34, "name": "Microsoft Corporation"},
-    "NVDA": {"price": 876.32, "change": -12.45, "change_pct": -1.40, "name": "NVIDIA Corporation"},
-    "GOOGL": {"price": 178.45, "change": 1.23, "change_pct": 0.69, "name": "Alphabet Inc."},
-    "AMZN": {"price": 212.78, "change": 4.56, "change_pct": 2.19, "name": "Amazon.com Inc."},
-    "META": {"price": 612.34, "change": 8.91, "change_pct": 1.48, "name": "Meta Platforms Inc."},
-    "TSLA": {"price": 342.18, "change": -8.76, "change_pct": -2.49, "name": "Tesla Inc."},
-    "SPY": {"price": 512.34, "change": 2.45, "change_pct": 0.48, "name": "SPDR S&P 500 ETF Trust"},
-    "QQQ": {"price": 438.67, "change": 3.12, "change_pct": 0.72, "name": "Invesco QQQ Trust"},
-    "JPM": {"price": 198.45, "change": 1.89, "change_pct": 0.96, "name": "JPMorgan Chase & Co."},
-    "BRK.B": {"price": 458.12, "change": 2.34, "change_pct": 0.51, "name": "Berkshire Hathaway Inc."},
-    "V": {"price": 312.45, "change": 1.67, "change_pct": 0.54, "name": "Visa Inc."},
-    "UNH": {"price": 542.18, "change": -3.12, "change_pct": -0.57, "name": "UnitedHealth Group"},
-    "JNJ": {"price": 156.78, "change": 0.89, "change_pct": 0.57, "name": "Johnson & Johnson"},
-    "WMT": {"price": 178.90, "change": 1.23, "change_pct": 0.69, "name": "Walmart Inc."},
-    "XOM": {"price": 108.45, "change": -1.56, "change_pct": -1.42, "name": "Exxon Mobil Corporation"},
-    "PG": {"price": 167.34, "change": 0.78, "change_pct": 0.47, "name": "Procter & Gamble Co."},
-    "MA": {"price": 498.12, "change": 3.45, "change_pct": 0.70, "name": "Mastercard Inc."},
-    "HD": {"price": 389.56, "change": 2.10, "change_pct": 0.54, "name": "The Home Depot Inc."},
-    "DIS": {"price": 112.34, "change": -0.67, "change_pct": -0.59, "name": "The Walt Disney Company"},
+    "AAPL": {"price": 234.56, "change": 3.21, "change_pct": 1.39, "name": "Apple Inc.", "sector": "Technology", "market_cap": 3580e9},
+    "MSFT": {"price": 428.90, "change": 5.67, "change_pct": 1.34, "name": "Microsoft Corporation", "sector": "Technology", "market_cap": 3180e9},
+    "NVDA": {"price": 876.32, "change": -12.45, "change_pct": -1.40, "name": "NVIDIA Corporation", "sector": "Technology", "market_cap": 2150e9},
+    "GOOGL": {"price": 178.45, "change": 1.23, "change_pct": 0.69, "name": "Alphabet Inc.", "sector": "Technology", "market_cap": 2200e9},
+    "AMZN": {"price": 212.78, "change": 4.56, "change_pct": 2.19, "name": "Amazon.com Inc.", "sector": "Consumer Discretionary", "market_cap": 2180e9},
+    "META": {"price": 612.34, "change": 8.91, "change_pct": 1.48, "name": "Meta Platforms Inc.", "sector": "Technology", "market_cap": 1560e9},
+    "TSLA": {"price": 342.18, "change": -8.76, "change_pct": -2.49, "name": "Tesla Inc.", "sector": "Consumer Discretionary", "market_cap": 1090e9},
+    "SPY": {"price": 512.34, "change": 2.45, "change_pct": 0.48, "name": "SPDR S&P 500 ETF Trust", "sector": "Broad Market ETF", "market_cap": None},
+    "QQQ": {"price": 438.67, "change": 3.12, "change_pct": 0.72, "name": "Invesco QQQ Trust", "sector": "Technology ETF", "market_cap": None},
+    "JPM": {"price": 198.45, "change": 1.89, "change_pct": 0.96, "name": "JPMorgan Chase & Co.", "sector": "Financials", "market_cap": 680e9},
+    "BRK.B": {"price": 458.12, "change": 2.34, "change_pct": 0.51, "name": "Berkshire Hathaway Inc.", "sector": "Financials", "market_cap": 1050e9},
+    "V": {"price": 312.45, "change": 1.67, "change_pct": 0.54, "name": "Visa Inc.", "sector": "Financials", "market_cap": 580e9},
+    "UNH": {"price": 542.18, "change": -3.12, "change_pct": -0.57, "name": "UnitedHealth Group", "sector": "Healthcare", "market_cap": 500e9},
+    "JNJ": {"price": 156.78, "change": 0.89, "change_pct": 0.57, "name": "Johnson & Johnson", "sector": "Healthcare", "market_cap": 380e9},
+    "WMT": {"price": 178.90, "change": 1.23, "change_pct": 0.69, "name": "Walmart Inc.", "sector": "Consumer Staples", "market_cap": 480e9},
+    "XOM": {"price": 108.45, "change": -1.56, "change_pct": -1.42, "name": "Exxon Mobil Corporation", "sector": "Energy", "market_cap": 460e9},
+    "PG": {"price": 167.34, "change": 0.78, "change_pct": 0.47, "name": "Procter & Gamble Co.", "sector": "Consumer Staples", "market_cap": 395e9},
+    "MA": {"price": 498.12, "change": 3.45, "change_pct": 0.70, "name": "Mastercard Inc.", "sector": "Financials", "market_cap": 460e9},
+    "HD": {"price": 389.56, "change": 2.10, "change_pct": 0.54, "name": "The Home Depot Inc.", "sector": "Consumer Discretionary", "market_cap": 390e9},
+    "DIS": {"price": 112.34, "change": -0.67, "change_pct": -0.59, "name": "The Walt Disney Company", "sector": "Communication Services", "market_cap": 205e9},
 }
 
 # ─── Metric data for scoring (MVP mock with realistic values) ───
+# period_end represents the last fiscal quarter end for these metrics
 
 _METRIC_DB: Dict[str, dict] = {
     "AAPL": {
@@ -107,6 +110,7 @@ _METRIC_DB: Dict[str, dict] = {
         "growth": {"revenue_growth_yoy": 8.2, "earnings_growth_yoy": 10.5, "fcf_growth_yoy": 12.1, "revenue_growth_3y_cagr": 7.8, "earnings_growth_3y_cagr": 9.2},
         "momentum": {"price_vs_sma50": 3.2, "price_vs_sma200": 8.5, "rsi_14": 58.0, "return_1m": 4.1, "return_3m": 7.8, "return_6m": 12.3},
         "risk": {"volatility_30d": 18.2, "max_drawdown_1y": -12.5, "debt_to_equity": 1.8, "interest_coverage": 42.5, "current_ratio": 0.99, "beta": 1.2},
+        "_period_end": "2025-12-28",  # Apple fiscal Q1 2026 (ends late Dec)
     },
     "MSFT": {
         "quality": {"roe": 38.5, "roic": 28.0, "gross_margin": 69.8, "operating_margin": 44.6, "fcf_margin": 33.2, "asset_turnover": 0.52},
@@ -114,6 +118,7 @@ _METRIC_DB: Dict[str, dict] = {
         "growth": {"revenue_growth_yoy": 15.2, "earnings_growth_yoy": 18.4, "fcf_growth_yoy": 20.1, "revenue_growth_3y_cagr": 13.5, "earnings_growth_3y_cagr": 16.2},
         "momentum": {"price_vs_sma50": 5.1, "price_vs_sma200": 12.3, "rsi_14": 64.0, "return_1m": 5.8, "return_3m": 10.2, "return_6m": 18.5},
         "risk": {"volatility_30d": 16.5, "max_drawdown_1y": -10.2, "debt_to_equity": 0.42, "interest_coverage": 48.0, "current_ratio": 1.77, "beta": 0.92},
+        "_period_end": "2025-12-31",
     },
     "NVDA": {
         "quality": {"roe": 115.0, "roic": 78.0, "gross_margin": 74.5, "operating_margin": 62.3, "fcf_margin": 45.2, "asset_turnover": 1.42},
@@ -121,6 +126,7 @@ _METRIC_DB: Dict[str, dict] = {
         "growth": {"revenue_growth_yoy": 122.0, "earnings_growth_yoy": 168.0, "fcf_growth_yoy": 145.0, "revenue_growth_3y_cagr": 55.0, "earnings_growth_3y_cagr": 72.0},
         "momentum": {"price_vs_sma50": -2.5, "price_vs_sma200": 15.0, "rsi_14": 48.0, "return_1m": -3.2, "return_3m": 5.1, "return_6m": 22.0},
         "risk": {"volatility_30d": 42.1, "max_drawdown_1y": -25.3, "debt_to_equity": 0.41, "interest_coverage": 132.0, "current_ratio": 4.17, "beta": 1.68},
+        "_period_end": "2026-01-26",  # NVDA fiscal Q4 2026 (ends late Jan)
     },
     "GOOGL": {
         "quality": {"roe": 28.5, "roic": 22.0, "gross_margin": 57.2, "operating_margin": 30.5, "fcf_margin": 22.8, "asset_turnover": 0.68},
@@ -128,6 +134,7 @@ _METRIC_DB: Dict[str, dict] = {
         "growth": {"revenue_growth_yoy": 12.5, "earnings_growth_yoy": 28.0, "fcf_growth_yoy": 15.2, "revenue_growth_3y_cagr": 11.0, "earnings_growth_3y_cagr": 18.5},
         "momentum": {"price_vs_sma50": 1.8, "price_vs_sma200": 6.5, "rsi_14": 55.0, "return_1m": 2.1, "return_3m": 5.5, "return_6m": 10.8},
         "risk": {"volatility_30d": 22.4, "max_drawdown_1y": -14.2, "debt_to_equity": 0.06, "interest_coverage": 285.0, "current_ratio": 2.1, "beta": 1.05},
+        "_period_end": "2025-12-31",
     },
     "AMZN": {
         "quality": {"roe": 22.8, "roic": 12.5, "gross_margin": 48.5, "operating_margin": 10.5, "fcf_margin": 8.2, "asset_turnover": 1.12},
@@ -135,6 +142,7 @@ _METRIC_DB: Dict[str, dict] = {
         "growth": {"revenue_growth_yoy": 12.8, "earnings_growth_yoy": 45.0, "fcf_growth_yoy": 55.0, "revenue_growth_3y_cagr": 11.5, "earnings_growth_3y_cagr": 35.0},
         "momentum": {"price_vs_sma50": 4.2, "price_vs_sma200": 10.5, "rsi_14": 61.0, "return_1m": 5.2, "return_3m": 8.5, "return_6m": 15.2},
         "risk": {"volatility_30d": 26.8, "max_drawdown_1y": -18.5, "debt_to_equity": 0.58, "interest_coverage": 18.5, "current_ratio": 1.05, "beta": 1.15},
+        "_period_end": "2025-12-31",
     },
     "META": {
         "quality": {"roe": 33.8, "roic": 25.0, "gross_margin": 81.5, "operating_margin": 41.2, "fcf_margin": 32.5, "asset_turnover": 0.58},
@@ -142,6 +150,7 @@ _METRIC_DB: Dict[str, dict] = {
         "growth": {"revenue_growth_yoy": 22.5, "earnings_growth_yoy": 35.0, "fcf_growth_yoy": 28.0, "revenue_growth_3y_cagr": 14.0, "earnings_growth_3y_cagr": 22.0},
         "momentum": {"price_vs_sma50": 3.5, "price_vs_sma200": 18.2, "rsi_14": 59.0, "return_1m": 4.8, "return_3m": 12.5, "return_6m": 25.0},
         "risk": {"volatility_30d": 28.5, "max_drawdown_1y": -16.8, "debt_to_equity": 0.28, "interest_coverage": 62.0, "current_ratio": 2.68, "beta": 1.22},
+        "_period_end": "2025-12-31",
     },
     "TSLA": {
         "quality": {"roe": 22.0, "roic": 15.5, "gross_margin": 18.2, "operating_margin": 8.5, "fcf_margin": 5.2, "asset_turnover": 0.92},
@@ -149,6 +158,7 @@ _METRIC_DB: Dict[str, dict] = {
         "growth": {"revenue_growth_yoy": 2.5, "earnings_growth_yoy": -15.0, "fcf_growth_yoy": -22.0, "revenue_growth_3y_cagr": 25.0, "earnings_growth_3y_cagr": -5.0},
         "momentum": {"price_vs_sma50": -5.2, "price_vs_sma200": -2.8, "rsi_14": 42.0, "return_1m": -8.5, "return_3m": -12.0, "return_6m": -5.5},
         "risk": {"volatility_30d": 52.3, "max_drawdown_1y": -35.2, "debt_to_equity": 0.08, "interest_coverage": 22.0, "current_ratio": 1.72, "beta": 2.05},
+        "_period_end": "2025-12-31",
     },
     "SPY": {
         "quality": {"roe": 18.0, "roic": 12.0, "gross_margin": 35.0, "operating_margin": 15.0, "fcf_margin": 10.0, "asset_turnover": 0.6},
@@ -156,6 +166,7 @@ _METRIC_DB: Dict[str, dict] = {
         "growth": {"revenue_growth_yoy": 5.5, "earnings_growth_yoy": 8.2, "fcf_growth_yoy": 6.5, "revenue_growth_3y_cagr": 6.0, "earnings_growth_3y_cagr": 7.5},
         "momentum": {"price_vs_sma50": 2.1, "price_vs_sma200": 7.5, "rsi_14": 56.0, "return_1m": 2.5, "return_3m": 5.0, "return_6m": 10.0},
         "risk": {"volatility_30d": 12.8, "max_drawdown_1y": -8.5, "debt_to_equity": 0.8, "interest_coverage": 12.0, "current_ratio": 1.5, "beta": 1.0},
+        "_period_end": "2025-12-31",
     },
     "QQQ": {
         "quality": {"roe": 25.0, "roic": 18.0, "gross_margin": 52.0, "operating_margin": 28.0, "fcf_margin": 18.0, "asset_turnover": 0.7},
@@ -163,6 +174,7 @@ _METRIC_DB: Dict[str, dict] = {
         "growth": {"revenue_growth_yoy": 12.5, "earnings_growth_yoy": 15.0, "fcf_growth_yoy": 14.0, "revenue_growth_3y_cagr": 10.5, "earnings_growth_3y_cagr": 13.0},
         "momentum": {"price_vs_sma50": 3.0, "price_vs_sma200": 10.0, "rsi_14": 57.0, "return_1m": 3.2, "return_3m": 7.5, "return_6m": 14.0},
         "risk": {"volatility_30d": 21.3, "max_drawdown_1y": -12.0, "debt_to_equity": 0.5, "interest_coverage": 15.0, "current_ratio": 1.8, "beta": 1.1},
+        "_period_end": "2025-12-31",
     },
     "JPM": {
         "quality": {"roe": 17.2, "roic": 3.5, "gross_margin": 62.0, "operating_margin": 38.5, "fcf_margin": 20.0, "asset_turnover": 0.06},
@@ -170,6 +182,7 @@ _METRIC_DB: Dict[str, dict] = {
         "growth": {"revenue_growth_yoy": 8.5, "earnings_growth_yoy": 12.0, "fcf_growth_yoy": 10.0, "revenue_growth_3y_cagr": 7.0, "earnings_growth_3y_cagr": 10.0},
         "momentum": {"price_vs_sma50": 2.8, "price_vs_sma200": 15.0, "rsi_14": 60.0, "return_1m": 3.5, "return_3m": 8.0, "return_6m": 18.0},
         "risk": {"volatility_30d": 14.8, "max_drawdown_1y": -8.0, "debt_to_equity": 1.2, "interest_coverage": 3.5, "current_ratio": 0.85, "beta": 1.08},
+        "_period_end": "2025-12-31",
     },
 }
 
@@ -177,6 +190,16 @@ _METRIC_DB: Dict[str, dict] = {
 def get_stock_metrics(symbol: str) -> Optional[dict]:
     """Get all metric categories for a symbol. Returns None if unknown."""
     return _METRIC_DB.get(symbol)
+
+
+def get_stock_db() -> Dict[str, dict]:
+    """Get the full stock database (for provider use)."""
+    return _STOCK_DB
+
+
+def get_metric_db() -> Dict[str, dict]:
+    """Get the full metric database (for provider use)."""
+    return _METRIC_DB
 
 
 def fetch_quote(symbol: str) -> dict:

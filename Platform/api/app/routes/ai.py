@@ -2,6 +2,8 @@
 AI endpoints:
 - POST /api/chat          — AI chat with intent routing
 - GET  /api/stocks/{ticker}/ai-overview — Structured AI overview per stock
+
+Updated to use standardized snapshot data and include staleness detection.
 """
 
 from __future__ import annotations
@@ -22,6 +24,11 @@ from app.services.market_data import (
     normalize_symbol,
     validate_symbol,
 )
+from app.services.market_data.compute_metrics import (
+    compute_staleness,
+    compute_standardized_metrics,
+)
+from app.services.market_data.providers import get_provider
 
 logger = logging.getLogger(__name__)
 
@@ -48,14 +55,12 @@ _COMPANY_MAP = {
 
 def parse_ticker(text: str) -> Optional[str]:
     """Extract a ticker symbol from user text."""
-    # Check parenthetical pattern first: "Tell me about Microsoft (MSFT)"
     paren_match = _COMPANY_TICKER_RE.search(text)
     if paren_match:
         t = paren_match.group(1)
         if t in _KNOWN_TICKERS:
             return t
 
-    # Check $MSFT or standalone MSFT
     upper = text.upper()
     ticker_match = _TICKER_RE.search(upper)
     if ticker_match:
@@ -63,7 +68,6 @@ def parse_ticker(text: str) -> Optional[str]:
         if t in _KNOWN_TICKERS:
             return t
 
-    # Check company names
     lower = text.lower()
     for company, ticker in _COMPANY_MAP.items():
         if company in lower:
@@ -107,11 +111,11 @@ def _compute_performance(metrics: Optional[dict]) -> dict:
 
     mom = metrics["momentum"]
     return {
-        "1d": None,  # Would need intraday data
+        "1d": None,
         "5d": None,
         "1m": mom.get("return_1m"),
         "3m": mom.get("return_3m"),
-        "ytd": mom.get("return_6m"),  # Approximate
+        "ytd": mom.get("return_6m"),
     }
 
 
@@ -125,14 +129,11 @@ def _generate_stock_chat_response(ticker: str) -> dict:
     change_pct = quote.get("change_pct", 0)
     perf = _compute_performance(metrics)
 
-    # Build structured sections
     sections = {}
 
-    # Price snapshot
     direction = "up" if change_pct >= 0 else "down"
     sections["snapshot"] = f"{ticker} ({name}) is trading at ${price:,.2f}, {direction} {abs(change_pct):.2f}% today."
 
-    # Performance
     perf_parts = []
     if perf.get("1m") is not None:
         perf_parts.append(f"1M: {'+' if perf['1m'] >= 0 else ''}{perf['1m']:.1f}%")
@@ -142,7 +143,6 @@ def _generate_stock_chat_response(ticker: str) -> dict:
         perf_parts.append(f"YTD (approx): {'+' if perf['ytd'] >= 0 else ''}{perf['ytd']:.1f}%")
     sections["performance"] = " | ".join(perf_parts) if perf_parts else "Performance data currently unavailable."
 
-    # Key metrics
     if metrics:
         quality = metrics.get("quality", {})
         value = metrics.get("value", {})
@@ -150,11 +150,11 @@ def _generate_stock_chat_response(ticker: str) -> dict:
 
         metric_parts = []
         if value.get("pe_ratio"):
-            metric_parts.append(f"P/E: {value['pe_ratio']:.1f}x")
+            metric_parts.append(f"P/E (TTM): {value['pe_ratio']:.1f}x")
         if quality.get("operating_margin"):
-            metric_parts.append(f"Op. Margin: {quality['operating_margin']:.1f}%")
+            metric_parts.append(f"Op. Margin (TTM): {quality['operating_margin']:.1f}%")
         if quality.get("roe"):
-            metric_parts.append(f"ROE: {quality['roe']:.1f}%")
+            metric_parts.append(f"ROE (TTM): {quality['roe']:.1f}%")
         if risk.get("volatility_30d"):
             metric_parts.append(f"30d Vol: {risk['volatility_30d']:.1f}%")
 
@@ -162,7 +162,6 @@ def _generate_stock_chat_response(ticker: str) -> dict:
     else:
         sections["key_metrics"] = f"Detailed metrics for {ticker} are not yet available."
 
-    # Assessment
     if metrics:
         mom = metrics.get("momentum", {})
         rsi = mom.get("rsi_14")
@@ -256,11 +255,9 @@ def chat_endpoint(request: ChatRequest):
     if not message:
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
-    # Route intent
     intent, ticker = classify_intent(message)
     logger.info("Chat intent=%s ticker=%s message=%s", intent, ticker, message[:100])
 
-    # Generate response based on intent
     if intent == "STOCK" and ticker:
         try:
             response = _generate_stock_chat_response(ticker)
@@ -288,7 +285,7 @@ def chat_endpoint(request: ChatRequest):
 def stock_ai_overview(ticker: str):
     """
     Structured AI overview for a specific stock.
-    Returns consistent JSON for UI rendering.
+    Now uses standardized snapshot data with staleness detection.
     """
     symbol = normalize_symbol(ticker)
     if not validate_symbol(symbol):
@@ -296,19 +293,31 @@ def stock_ai_overview(ticker: str):
 
     logger.info("AI overview requested for %s", symbol)
 
-    # Fetch data
-    quote = fetch_quote(symbol)
-    metrics = get_stock_metrics(symbol)
+    # Use provider for structured data
+    provider = get_provider()
+    quote_data = provider.get_quote(symbol)
+    fundamentals = provider.get_fundamentals_ttm(symbol)
+    forward = provider.get_estimates_forward(symbol)
     name = get_stock_name(symbol)
+    metrics = get_stock_metrics(symbol)
 
-    if quote.get("error") == "NO_QUOTE" and not metrics:
+    if quote_data.price == 0 and not metrics:
         raise HTTPException(
             status_code=404,
             detail=f"No data available for {symbol}. Cannot generate overview.",
         )
 
-    price = quote.get("price", 0)
-    change_pct = quote.get("change_pct", 0)
+    # Compute standardized metrics for staleness check
+    standardized = compute_standardized_metrics(
+        ticker=symbol,
+        fundamentals=fundamentals,
+        quote=quote_data,
+        forward=forward,
+    )
+    data_quality = compute_staleness(fundamentals, forward, standardized)
+
+    price = quote_data.price
+    change_pct = quote_data.change_pct
     perf = _compute_performance(metrics)
 
     # Build drivers from metrics
@@ -334,14 +343,16 @@ def stock_ai_overview(ticker: str):
     if not drivers:
         drivers = ["Insufficient data for driver analysis", "Monitor for updated metrics", "Review peer comparison"]
 
-    # Build outlook
     outlook = _build_outlook(symbol, metrics, change_pct)
-
-    # Build news
     news = _build_news(symbol)
-
-    # What to watch
     watch = _build_what_to_watch(symbol, metrics)
+
+    # Build staleness notice for AI text
+    staleness_notice = None
+    if "fundamentals_old" in data_quality.stale_flags:
+        staleness_notice = f"Some fundamentals may be delayed; last reported period: {fundamentals.period_end or 'unknown'}."
+    elif "no_fundamentals" in data_quality.stale_flags:
+        staleness_notice = "Fundamental data is not currently available for this security."
 
     return {
         "ticker": symbol,
@@ -349,13 +360,17 @@ def stock_ai_overview(ticker: str):
         "snapshot": {
             "price": price,
             "day_change_pct": change_pct,
-            "volume": None,  # Would require volume data
+            "volume": None,
         },
         "performance": perf,
         "drivers": drivers[:3],
         "outlook": outlook,
         "news": news,
         "what_to_watch": watch[:3],
+        "data_quality": data_quality.model_dump(),
+        "staleness_notice": staleness_notice,
+        "data_as_of": fundamentals.period_end,
+        "source": provider.name,
         "disclaimer": "This analysis is generated algorithmically and is not investment advice. Past performance does not indicate future results.",
     }
 
