@@ -1,7 +1,10 @@
 /**
  * Client-side auth token helpers.
- * Token is stored in localStorage under a well-known key.
- * A session cookie is set for middleware/SSR awareness.
+ *
+ * Access token: stored in localStorage (short-lived, 10 min).
+ * Refresh token: stored in an HTTP-only cookie set by the API (not accessible
+ * from JS). The browser sends it automatically on /auth/* requests.
+ * Session cookie: lightweight indicator for Next.js middleware SSR redirect.
  */
 
 const LS_TOKEN = "apter_token";
@@ -85,4 +88,10 @@ export function clearStoredUser(): void {
 export function logout(): void {
   clearToken();
   clearStoredUser();
+  // Clear the HTTP-only refresh cookie via the backend
+  try {
+    fetch("/auth/logout", { method: "POST", credentials: "include" });
+  } catch {
+    // Fire-and-forget
+  }
 }

@@ -27,9 +27,9 @@ export default function AIOverviewPage() {
     <div className="space-y-4 max-w-3xl">
       {/* Page header */}
       <div>
-        <h1 className="text-lg font-semibold">AI Market Overview</h1>
+        <h1 className="text-lg font-semibold">Market Intelligence Brief</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          AI-generated market briefing with educational context and risk observations.
+          {COMPLIANCE.INTELLIGENCE_DESCRIPTOR}
         </p>
       </div>
 
@@ -119,7 +119,7 @@ export default function AIOverviewPage() {
         </div>
       )}
 
-      {/* Overview card */}
+      {/* Intelligence card */}
       <AIOverviewCard
         tickers={selectedTickers.length > 0 ? selectedTickers : undefined}
         timeframe={timeframe}

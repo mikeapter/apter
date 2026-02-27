@@ -12,6 +12,18 @@ class PlanTier(str, Enum):
     pro = "pro"
 
 
+# Emails granted complimentary Pro access (case-insensitive).
+COMPLIMENTARY_PRO_EMAILS: set[str] = {
+    "siegetheday03@gmail.com",
+    "mapter16@gmail.com",
+}
+
+
+def is_complimentary_pro(email: str) -> bool:
+    """Return True if *email* has complimentary Pro access."""
+    return email.lower() in COMPLIMENTARY_PRO_EMAILS
+
+
 _TIER_RANK = {
     PlanTier.observer: 0,
     PlanTier.signals: 1,
