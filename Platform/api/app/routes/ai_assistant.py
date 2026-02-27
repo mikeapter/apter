@@ -510,6 +510,59 @@ def clear_ai_cache(
 
 
 # ---------------------------------------------------------------------------
+# GET /api/ai/diagnostics — check AI pipeline health
+# ---------------------------------------------------------------------------
+
+
+@router.get("/diagnostics")
+def ai_diagnostics(
+    user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Check AI pipeline configuration and connectivity."""
+    import httpx
+    from app.services.ai.client import _API_KEY, _BASE_URL, _MODEL, _TIMEOUT, _headers
+
+    diag: Dict[str, Any] = {
+        "api_key_set": bool(_API_KEY),
+        "api_key_prefix": _API_KEY[:8] + "..." if _API_KEY else "(empty)",
+        "base_url": _BASE_URL,
+        "model": _MODEL,
+        "timeout": _TIMEOUT,
+    }
+
+    # Test connectivity with a minimal request
+    try:
+        body = {
+            "model": _MODEL,
+            "messages": [
+                {"role": "user", "content": "Say hello in JSON: {\"greeting\": \"hello\"}"}
+            ],
+            "temperature": 0,
+            "max_tokens": 50,
+            "response_format": {"type": "json_object"},
+        }
+        with httpx.Client(timeout=_TIMEOUT) as client:
+            resp = client.post(
+                f"{_BASE_URL}/chat/completions",
+                headers=_headers(),
+                json=body,
+            )
+            diag["status_code"] = resp.status_code
+            if resp.status_code == 200:
+                data = resp.json()
+                diag["test_response"] = data["choices"][0]["message"]["content"][:200]
+                diag["ai_connected"] = True
+            else:
+                diag["error"] = resp.text[:500]
+                diag["ai_connected"] = False
+    except Exception as exc:
+        diag["ai_connected"] = False
+        diag["error"] = str(exc)[:500]
+
+    return diag
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
