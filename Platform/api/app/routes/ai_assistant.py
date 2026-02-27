@@ -447,6 +447,9 @@ def market_intelligence_brief(
         elif rsi < 40 and spy_tech.get("macdSignal") == "bearish":
             regime = "Risk-Off"
 
+    # Compute breadth from actual sector ticker changes
+    breadth_context = _compute_breadth(tool_data)
+
     now_iso = datetime.now(timezone.utc).isoformat()
 
     brief = {
@@ -454,7 +457,7 @@ def market_intelligence_brief(
         "risk_dashboard": {
             "regime": regime,
             "volatility_context": vol_context,
-            "breadth_context": "Moderate breadth with technology and financials showing relative strength.",
+            "breadth_context": breadth_context,
         },
         "catalysts": result_dict.get("checklist", [])[:6],
         "what_changed": result_dict.get("risk_flags", [])[:3],
@@ -565,6 +568,59 @@ def ai_diagnostics(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _compute_breadth(tool_data: dict[str, Any]) -> str:
+    """Compute breadth context from actual sector ticker changes."""
+    sector_tickers = ["AAPL", "MSFT", "NVDA", "META", "JPM", "XOM"]
+    advancing = []
+    declining = []
+
+    for t in sector_tickers:
+        ctx = tool_data.get(t, "")
+        if "Change:" not in ctx:
+            continue
+        try:
+            # Parse "Price: $X, Change: Y%" format
+            change_part = ctx.split("Change:")[1].strip().rstrip("%")
+            pct = float(change_part)
+            if pct > 0:
+                advancing.append((t, pct))
+            elif pct < 0:
+                declining.append((t, pct))
+        except (ValueError, IndexError):
+            continue
+
+    total = len(advancing) + len(declining)
+    if total == 0:
+        return "Breadth data unavailable."
+
+    adv_pct = len(advancing) / total * 100
+
+    # Build sector descriptions
+    sectors = {
+        "AAPL": "tech", "MSFT": "tech", "NVDA": "semiconductors",
+        "META": "communication services", "JPM": "financials", "XOM": "energy",
+    }
+    strong = [sectors.get(t, t) for t, _ in sorted(advancing, key=lambda x: -x[1])]
+    weak = [sectors.get(t, t) for t, _ in sorted(declining, key=lambda x: x[1])]
+
+    if adv_pct >= 80:
+        breadth_label = "Broad strength"
+    elif adv_pct >= 60:
+        breadth_label = "Moderate breadth"
+    elif adv_pct >= 40:
+        breadth_label = "Mixed breadth"
+    else:
+        breadth_label = "Narrow breadth"
+
+    parts = [breadth_label]
+    if strong:
+        parts.append(f"with {', '.join(dict.fromkeys(strong))} showing relative strength")
+    if weak:
+        parts.append(f"while {', '.join(dict.fromkeys(weak))} lag" if strong else f"with {', '.join(dict.fromkeys(weak))} underperforming")
+
+    return ". ".join([" ".join(parts)]) + "."
 
 
 def _infer_regime(metrics: dict | None) -> str:

@@ -13,10 +13,16 @@ New code should import from submodules:
 
 from __future__ import annotations
 
+import logging
+import os
 import re
 import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
+
+import httpx
+
+logger = logging.getLogger(__name__)
 
 # ─── Symbol normalization ───
 
@@ -202,9 +208,40 @@ def get_metric_db() -> Dict[str, dict]:
     return _METRIC_DB
 
 
+def _finnhub_quote(symbol: str) -> dict | None:
+    """Fetch a live quote from Finnhub. Returns None on failure."""
+    key = os.getenv("FINNHUB_API_KEY")
+    if not key:
+        return None
+    try:
+        with httpx.Client(timeout=10) as client:
+            r = client.get(
+                "https://finnhub.io/api/v1/quote",
+                params={"symbol": symbol, "token": key},
+            )
+        r.raise_for_status()
+        d = r.json()
+        if d.get("c") and d["c"] > 0:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            return {
+                "symbol": symbol,
+                "price": round(d["c"], 2),
+                "change": round(d.get("d") or 0, 2),
+                "change_pct": round(d.get("dp") or 0, 2),
+                "as_of": now_iso,
+                "session": _is_market_open(),
+                "delay_seconds": 0,
+                "source": "finnhub",
+            }
+    except Exception:
+        logger.debug("Finnhub quote failed for %s", symbol, exc_info=True)
+    return None
+
+
 def fetch_quote(symbol: str) -> dict:
     """
     Fetch a single quote. Uses cache if fresh.
+    Tries Finnhub live data first, falls back to internal DB.
     Returns structured quote dict with all required fields.
     """
     symbol = normalize_symbol(symbol)
@@ -216,10 +253,16 @@ def fetch_quote(symbol: str) -> dict:
         result = {k: v for k, v in cached.items() if k != "_cached_at"}
         return result
 
+    # Try Finnhub live quote
+    live = _finnhub_quote(symbol)
+    if live:
+        _quote_cache[symbol] = {**live, "_cached_at": time.time()}
+        return live
+
     session = _is_market_open()
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    # Primary: internal DB
+    # Fallback: internal DB
     stock = _STOCK_DB.get(symbol)
     if stock:
         quote = {
