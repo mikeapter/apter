@@ -16,6 +16,9 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
 
+    # Account status
+    is_active = Column(Boolean, default=True, server_default="true", nullable=False)
+
     # Profile (legacy column from earlier migration — kept for backward compat)
     full_name = Column(String, nullable=True)
 

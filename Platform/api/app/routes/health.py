@@ -1,3 +1,4 @@
+# Platform/api/app/routes/health.py
 """Health check endpoint for monitoring and client warmup."""
 
 from __future__ import annotations
@@ -9,6 +10,7 @@ from fastapi import APIRouter
 from sqlalchemy import text
 
 from app.db.session import SessionLocal
+from app.security.config import IS_PRODUCTION
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +22,7 @@ def healthz():
     """
     Lightweight health check.
     Verifies: app alive + DB reachable.
+    In production, reveals minimal information.
     """
     db_ok = False
     try:
@@ -30,8 +33,13 @@ def healthz():
     except Exception as e:
         logger.error("Health check DB failure: %s", str(e))
 
-    return {
+    response = {
         "status": "ok" if db_ok else "degraded",
-        "db": "ok" if db_ok else "unreachable",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+    # Only expose component details in non-production
+    if not IS_PRODUCTION:
+        response["db"] = "ok" if db_ok else "unreachable"
+
+    return response
