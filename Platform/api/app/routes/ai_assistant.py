@@ -495,6 +495,21 @@ def ai_feedback(
 
 
 # ---------------------------------------------------------------------------
+# POST /api/ai/cache/clear — bust the AI response cache
+# ---------------------------------------------------------------------------
+
+
+@router.post("/cache/clear")
+def clear_ai_cache(
+    user: User = Depends(get_current_user),
+) -> Dict[str, str]:
+    """Clear all cached AI responses. Useful after deploys or prompt changes."""
+    ai_cache.clear()
+    logger.info("AI cache cleared by user=%s", user.id)
+    return {"status": "ok", "message": "AI cache cleared"}
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
