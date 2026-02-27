@@ -4,6 +4,7 @@ import { PortfolioPanel } from "../../components/dashboard/PortfolioPanel";
 import { PerformancePanel } from "../../components/dashboard/PerformancePanel";
 import { MarketMoversPanel } from "../../components/dashboard/MarketMoversPanel";
 import { AIOverviewCard } from "../../components/ai/AIOverviewCard";
+import { MarketBriefPanel } from "../../components/dashboard/MarketBriefPanel";
 import { PortfolioProvider } from "../../providers/PortfolioProvider";
 import { StartHerePanel, useIsEmptyAccount } from "../../components/dashboard/StartHerePanel";
 
@@ -30,6 +31,9 @@ function DashboardContent() {
           <MarketMoversPanel />
         </div>
       </div>
+
+      {/* Market Intelligence Brief */}
+      <MarketBriefPanel />
 
       {/* AI Overview widget */}
       <div className="max-w-3xl">
