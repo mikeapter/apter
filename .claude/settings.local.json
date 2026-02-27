@@ -11,7 +11,10 @@
       "Bash(gh pr:*)",
       "Bash(where:*)",
       "Bash(git fetch:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(git add Platform/web/app/components/stock/StockDetailView.tsx)",
+      "Bash(git rebase --continue)",
+      "Bash(git add -A)"
     ]
   }
 }

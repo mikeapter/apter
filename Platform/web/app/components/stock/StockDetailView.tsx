@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -48,6 +48,7 @@ import {
 import type { NormalizedQuote } from "@/lib/market/types";
 import { FeatureGate } from "../billing/FeatureGate";
 import { TierBadge } from "../billing/TierBadge";
+import { GroundedBriefPanel } from "./GroundedBriefPanel";
 
 type TimeRange = "1D" | "1W" | "1M" | "3M" | "1Y" | "ALL";
 const TIME_RANGES: TimeRange[] = ["1D", "1W", "1M", "3M", "1Y", "ALL"];
@@ -279,159 +280,6 @@ function FundamentalsPanel({ snapshot }: { snapshot: StockSnapshot }) {
         source={f.source}
         quality={snapshot.data_quality}
       />
-    </section>
-  );
-}
-
-/* ─── Stock Intelligence Brief Panel ─── */
-
-function StockIntelligencePanel({ ticker }: { ticker: string }) {
-  const [data, setData] = useState<StockIntelligenceBrief | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!ticker) return;
-    setLoading(true);
-    setError(null);
-
-    fetchStockIntelligence(ticker)
-      .then((res) => setData(res))
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load intelligence brief"))
-      .finally(() => setLoading(false));
-  }, [ticker]);
-
-  if (loading) {
-    return (
-      <section className="bt-panel p-4">
-        <div className="bt-panel-title">STOCK INTELLIGENCE BRIEF</div>
-        <div className="mt-4 flex items-center justify-center gap-2 py-8 text-muted-foreground text-sm">
-          <Loader2 size={14} className="animate-spin" />
-          Generating analysis...
-        </div>
-      </section>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <section className="bt-panel p-4">
-        <div className="bt-panel-title">STOCK INTELLIGENCE BRIEF</div>
-        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-          <AlertCircle size={14} />
-          {error || "Brief unavailable"}
-        </div>
-      </section>
-    );
-  }
-
-  const snapshotEntries = Object.entries(data.snapshot).filter(
-    ([, v]) => v !== null && v !== undefined,
-  );
-
-  return (
-    <section className="bt-panel p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="bt-panel-title">STOCK INTELLIGENCE BRIEF</div>
-        {data.cached && (
-          <span className="text-[10px] text-muted-foreground bg-panel px-1.5 py-0.5 rounded">cached</span>
-        )}
-      </div>
-
-      {/* Data sources */}
-      {data.data_sources?.length > 0 && (
-        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-panel rounded px-2 py-1">
-          <Database size={10} className="shrink-0" />
-          <span>Data sources: {data.data_sources.join(", ")}</span>
-        </div>
-      )}
-
-      {/* Executive summary */}
-      <p className="text-sm leading-relaxed">{data.executive_summary}</p>
-
-      {/* Quantitative snapshot */}
-      {snapshotEntries.length > 0 && (
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">
-            Quantitative Snapshot
-          </div>
-          <div className="flex flex-wrap gap-3">
-            {snapshotEntries.map(([k, v]) => (
-              <div key={k} className="rounded-md border border-border bg-panel-2 px-2.5 py-1.5 text-center min-w-[70px]">
-                <div className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground">{k.replace(/_/g, " ")}</div>
-                <div className="text-sm font-mono font-medium mt-0.5">{v}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Key Drivers */}
-      {data.key_drivers?.length > 0 && (
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">Key Drivers</div>
-          <ul className="space-y-1.5">
-            {data.key_drivers.map((d, i) => (
-              <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                <TrendingUp size={12} className="text-risk-on mt-0.5 shrink-0" />
-                {d}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Risk Tags */}
-      {data.risk_tags?.length > 0 && (
-        <div>
-          <div className="flex items-center gap-1 mb-2">
-            <ShieldAlert size={12} className="text-orange-400" />
-            <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Risk Tags</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {data.risk_tags.map((tag, i) => {
-              const levelColor =
-                tag.level === "Elevated" ? "border-orange-400/40 text-orange-400" :
-                tag.level === "Moderate" ? "border-yellow-400/40 text-yellow-400" :
-                "border-border text-muted-foreground";
-              return (
-                <span
-                  key={i}
-                  className={`text-[10px] border rounded px-2 py-0.5 ${levelColor}`}
-                >
-                  {tag.category}: {tag.level}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Regime Context */}
-      {data.regime_context && (
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-1">Regime Context</div>
-          <p className="text-xs text-muted-foreground leading-relaxed">{data.regime_context}</p>
-        </div>
-      )}
-
-      {/* What to Monitor */}
-      {data.what_to_monitor?.length > 0 && (
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">What to Monitor</div>
-          <ul className="space-y-1">
-            {data.what_to_monitor.map((w, i) => (
-              <li key={i} className="text-xs text-muted-foreground">&bull; {w}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Timestamp + Disclaimer */}
-      <div className="text-[10px] text-muted-foreground pt-2 border-t border-border">
-        {data.as_of && <span className="mr-2">As of {data.as_of}.</span>}
-        {COMPLIANCE.NOT_INVESTMENT_ADVICE}
-      </div>
     </section>
   );
 }
@@ -756,8 +604,8 @@ export function StockDetailView({ ticker }: { ticker: string }) {
             <FundamentalsPanel snapshot={snapshot} />
           ) : null}
 
-          {/* Stock Intelligence Brief */}
-          <StockIntelligencePanel ticker={ticker} />
+          {/* Finnhub-grounded AI brief */}
+          <GroundedBriefPanel ticker={ticker} />
 
           {/* Decision Support */}
           <section className="bt-panel p-4">

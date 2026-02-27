@@ -281,6 +281,33 @@ def chat_endpoint(request: ChatRequest):
     }
 
 
+@router.get("/stocks/{ticker}/brief")
+def stock_grounded_brief(ticker: str):
+    """
+    Finnhub-grounded AI brief for a specific stock.
+    Every number is validated against the Finnhub Fact Pack before display.
+    Falls back to a deterministic (no-AI) brief if validation fails.
+    """
+    from app.services.grounded_ai_brief import get_grounded_ai_brief
+
+    symbol = normalize_symbol(ticker)
+    if not validate_symbol(symbol):
+        raise HTTPException(status_code=400, detail=f"Invalid ticker: {ticker}")
+
+    logger.info("Grounded brief requested for %s", symbol)
+
+    try:
+        result = get_grounded_ai_brief(symbol)
+    except RuntimeError as e:
+        # Missing API key or similar config issue
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception:
+        logger.exception("Grounded brief failed for %s", symbol)
+        raise HTTPException(status_code=502, detail="Failed to generate grounded brief")
+
+    return result
+
+
 @router.get("/stocks/{ticker}/ai-overview")
 def stock_ai_overview(ticker: str):
     """
