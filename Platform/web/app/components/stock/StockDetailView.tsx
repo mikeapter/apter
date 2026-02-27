@@ -8,6 +8,8 @@ import {
   TrendingDown,
   Loader2,
   AlertCircle,
+  AlertTriangle,
+  Info,
   Clock,
   Database,
   ShieldAlert,
@@ -33,6 +35,16 @@ import {
   type AptRatingResponse,
 } from "../../lib/api/ai";
 import { COMPLIANCE } from "../../lib/compliance";
+import {
+  fetchStockSnapshot,
+  formatDataAsOf,
+  formatFetchedAt,
+  formatMetricWithUnit,
+  hasStaleFlag,
+  type StockSnapshot,
+  type MetricValue,
+  type DataQuality,
+} from "../../lib/stockSnapshot";
 import type { NormalizedQuote } from "@/lib/market/types";
 import { FeatureGate } from "../billing/FeatureGate";
 import { TierBadge } from "../billing/TierBadge";
@@ -42,6 +54,14 @@ const TIME_RANGES: TimeRange[] = ["1D", "1W", "1M", "3M", "1Y", "ALL"];
 
 function formatCurrency(n: number): string {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
+}
+
+function formatMarketCap(n: number | null): string {
+  if (n === null || n === undefined) return "N/A";
+  if (n >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
+  if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(0)}M`;
+  return `$${n.toLocaleString()}`;
 }
 
 /* ─── Price Chart ─── */
@@ -93,6 +113,173 @@ function PriceChart({ ticker, range }: { ticker: string; range: TimeRange }) {
         </AreaChart>
       </ResponsiveContainer>
     </ClientOnly>
+  );
+}
+
+/* ─── Label badge component ─── */
+
+function LabelBadge({ label }: { label: string }) {
+  const colorMap: Record<string, string> = {
+    TTM: "bg-blue-500/10 text-blue-400 border-blue-500/30",
+    MRQ: "bg-purple-500/10 text-purple-400 border-purple-500/30",
+    "Forward FY1": "bg-amber-500/10 text-amber-400 border-amber-500/30",
+    "Forward FY2": "bg-amber-500/10 text-amber-400 border-amber-500/30",
+    Forward: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+    "30-Day": "bg-cyan-500/10 text-cyan-400 border-cyan-500/30",
+  };
+  const cls = colorMap[label] || "bg-muted/50 text-muted-foreground border-border";
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider border ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
+/* ─── Metric row component ─── */
+
+function MetricRow({ name, metric, unit = "" }: { name: string; metric: MetricValue; unit?: "x" | "%" | "" }) {
+  return (
+    <div className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">{name}</span>
+        <LabelBadge label={metric.label} />
+      </div>
+      <div className="text-right">
+        {metric.value !== null ? (
+          <span className="text-sm font-mono font-medium">
+            {formatMetricWithUnit(metric, unit)}
+            {unit}
+          </span>
+        ) : (
+          <span
+            className="text-xs text-muted-foreground italic cursor-help"
+            title={metric.null_reason || "Data unavailable"}
+          >
+            N/A
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Data source footer ─── */
+
+function DataSourceFooter({
+  dataAsOf,
+  fetchedAt,
+  source,
+  quality,
+}: {
+  dataAsOf: string;
+  fetchedAt: string;
+  source: string;
+  quality: DataQuality;
+}) {
+  const isStale =
+    hasStaleFlag(quality, "fundamentals_old") ||
+    hasStaleFlag(quality, "no_fundamentals");
+
+  return (
+    <div className="mt-3 pt-2 border-t border-border space-y-1">
+      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+        {isStale && (
+          <span className="flex items-center gap-1 text-amber-400" title="Fundamentals may be delayed.">
+            <AlertTriangle size={10} />
+          </span>
+        )}
+        <span>Data as of: {formatDataAsOf(dataAsOf)}</span>
+        <span>&middot;</span>
+        <span>Fetched: {formatFetchedAt(fetchedAt)}</span>
+        <span>&middot;</span>
+        <span>Source: {source}</span>
+      </div>
+      {isStale && (
+        <div className="flex items-center gap-1 text-[10px] text-amber-400">
+          <AlertTriangle size={10} />
+          Fundamentals may be delayed. Data is based on the last reported period.
+        </div>
+      )}
+      {hasStaleFlag(quality, "no_forward_estimates") && (
+        <div className="text-[10px] text-muted-foreground italic">
+          Forward estimates unavailable with current data source.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Fundamentals panel (from snapshot) ─── */
+
+function FundamentalsPanel({ snapshot }: { snapshot: StockSnapshot }) {
+  const f = snapshot.fundamentals;
+  const fwd = snapshot.forward;
+
+  return (
+    <section className="bt-panel p-4">
+      <div className="bt-panel-title">FUNDAMENTALS &amp; METRICS</div>
+
+      <div className="mt-3 grid gap-4 sm:grid-cols-2">
+        {/* Valuation */}
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">
+            Valuation
+          </div>
+          <MetricRow name="P/E Ratio" metric={f.pe_trailing} unit="x" />
+          <MetricRow name="P/E Forward" metric={f.pe_forward_fy1} unit="x" />
+          <MetricRow name="P/E Forward" metric={f.pe_forward_fy2} unit="x" />
+          <MetricRow name="PEG" metric={f.peg_forward} unit="x" />
+        </div>
+
+        {/* Growth */}
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">
+            Growth
+          </div>
+          <MetricRow name="Revenue YoY" metric={f.revenue_yoy_ttm} unit="%" />
+          <MetricRow name="EPS YoY" metric={f.eps_yoy_ttm} unit="%" />
+        </div>
+
+        {/* Profitability */}
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">
+            Profitability
+          </div>
+          <MetricRow name="Gross Margin" metric={f.gross_margin_ttm} unit="%" />
+          <MetricRow name="Operating Margin" metric={f.operating_margin_ttm} unit="%" />
+          <MetricRow name="ROE" metric={f.roe_ttm} unit="%" />
+        </div>
+
+        {/* Risk & Balance Sheet */}
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium mb-2">
+            Risk &amp; Balance Sheet
+          </div>
+          <MetricRow name="Debt/Equity" metric={f.debt_to_equity_mrq} unit="x" />
+          <MetricRow name="Beta" metric={f.beta} unit="" />
+          <MetricRow name="30d Volatility" metric={f.realized_vol_30d} unit="%" />
+        </div>
+      </div>
+
+      {/* Forward estimates notice */}
+      {!fwd.available && (
+        <div className="mt-3 flex items-start gap-2 rounded-md border border-border bg-panel-2 px-3 py-2">
+          <Info size={12} className="text-muted-foreground mt-0.5 shrink-0" />
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Forward estimates unavailable with current data source. Integrate a
+            provider like FMP, Polygon, or Finnhub for FY1/FY2 consensus
+            estimates and forward P/E.
+          </p>
+        </div>
+      )}
+
+      <DataSourceFooter
+        dataAsOf={f.data_as_of}
+        fetchedAt={f.fetched_at}
+        source={f.source}
+        quality={snapshot.data_quality}
+      />
+    </section>
   );
 }
 
@@ -352,7 +539,7 @@ function AptRatingCard({ ticker }: { ticker: string }) {
   );
 }
 
-/* ─── Live Quote Hook + Card (from master) ─── */
+/* ─── Live Quote Hook + Card ─── */
 
 function useMarketQuote(ticker: string) {
   const [quote, setQuote] = useState<NormalizedQuote | null>(null);
@@ -457,10 +644,27 @@ export function StockDetailView({ ticker }: { ticker: string }) {
   const [range, setRange] = useState<TimeRange>("1M");
   const { quote, loading: quoteLoading, error: quoteError } = useMarketQuote(ticker);
 
+  // Fetch snapshot data from backend (for fundamentals panel)
+  const [snapshot, setSnapshot] = useState<StockSnapshot | null>(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(true);
+
+  useEffect(() => {
+    if (!ticker) return;
+    setSnapshotLoading(true);
+
+    fetchStockSnapshot(ticker).then((res) => {
+      if (res.ok) {
+        setSnapshot(res.data);
+      }
+      setSnapshotLoading(false);
+    });
+  }, [ticker]);
+
   // Use live quote when available, fall back to mock data
   const price = quote?.price ?? stock.price;
   const change = quote?.change ?? stock.change;
   const changePct = quote?.changePercent ?? stock.changePct;
+  const displayMarketCap = snapshot?.quote.market_cap ?? null;
 
   const changeColor = change >= 0 ? "text-risk-on" : "text-risk-off";
   const changeSign = change >= 0 ? "+" : "";
@@ -477,7 +681,12 @@ export function StockDetailView({ ticker }: { ticker: string }) {
             <h1 className="text-2xl font-semibold">{stock.ticker}</h1>
             <GradeBadge grade={stock.grade} />
           </div>
-          <div className="text-muted-foreground text-sm">{stock.companyName} &middot; {stock.sector}</div>
+          <div className="text-muted-foreground text-sm">
+            {snapshot?.profile.name ?? stock.companyName} &middot; {snapshot?.profile.sector ?? stock.sector}
+            {displayMarketCap !== null && (
+              <> &middot; Mkt Cap: {formatMarketCap(displayMarketCap)}</>
+            )}
+          </div>
           {price > 0 && (
             <div className="mt-1 flex items-baseline gap-2 flex-wrap">
               <span className="text-3xl font-semibold font-mono">{formatCurrency(price)}</span>
@@ -534,7 +743,20 @@ export function StockDetailView({ ticker }: { ticker: string }) {
           {/* Candlestick chart — Finnhub-powered OHLCV */}
           <CandlestickChart ticker={ticker} />
 
-          {/* Stock Intelligence Brief — replaces old AI Overview panel */}
+          {/* Fundamentals & Metrics panel (from snapshot) */}
+          {snapshotLoading ? (
+            <section className="bt-panel p-4">
+              <div className="bt-panel-title">FUNDAMENTALS &amp; METRICS</div>
+              <div className="mt-4 flex items-center justify-center gap-2 py-8 text-muted-foreground text-sm">
+                <Loader2 size={14} className="animate-spin" />
+                Loading fundamentals...
+              </div>
+            </section>
+          ) : snapshot ? (
+            <FundamentalsPanel snapshot={snapshot} />
+          ) : null}
+
+          {/* Stock Intelligence Brief */}
           <StockIntelligencePanel ticker={ticker} />
 
           {/* Decision Support */}

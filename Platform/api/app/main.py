@@ -15,6 +15,7 @@ from app.routes import ai_assistant
 from app.routes import rating as rating_routes
 from app.routes import password_reset
 from app.routes import data as data_routes
+from app.routes import stocks as stocks_routes
 from app.routes import market as market_routes
 from app.db.init_db import init_db
 from app.services.finnhub.config import log_status as finnhub_log_status
@@ -107,6 +108,7 @@ app.include_router(profile.router)
 app.include_router(scores.router)
 app.include_router(quotes.router)
 app.include_router(ai.router)              # /api/chat + /api/stocks/{ticker}/ai-overview
+app.include_router(stocks_routes.router)   # /api/stocks/{ticker}/snapshot + /refresh
 app.include_router(ai_assistant.router)     # /api/ai/chat, /api/ai/overview, /api/ai/intelligence/*
 app.include_router(rating_routes.router)    # /api/rating/{ticker}
 app.include_router(password_reset.router)  # /auth/forgot-password, /auth/reset-password
