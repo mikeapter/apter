@@ -186,7 +186,7 @@ export function AIAssistantPanel() {
               try {
                 structured = JSON.parse(fullText) as AIResponse;
               } catch {
-                // Not valid JSON — leave as plain text
+                // Not valid JSON -- leave as plain text
               }
 
               setMessages((prev) =>
@@ -204,7 +204,7 @@ export function AIAssistantPanel() {
               );
             },
             onError(error) {
-              console.error("[AI Chat] SSE error:", error?.message || error);
+              console.error("[Apter Intelligence] SSE error:", error?.message || error);
               chatJSON({ message: msg, context: { tickers: tickers.length ? tickers : undefined } })
                 .then((json) => {
                   setMessages((prev) =>
@@ -223,13 +223,13 @@ export function AIAssistantPanel() {
                 })
                 .catch((fallbackErr) => {
                   const errMsg = fallbackErr?.message || String(fallbackErr);
-                  console.error("[AI Chat] JSON fallback error:", errMsg);
+                  console.error("[Apter Intelligence] JSON fallback error:", errMsg);
                   setMessages((prev) =>
                     prev.map((m) =>
                       m.id === assistantMsgId
                         ? {
                             ...m,
-                            content: `AI service error: ${errMsg.slice(0, 200)}`,
+                            content: `Service error: ${errMsg.slice(0, 200)}`,
                             isStreaming: false,
                           }
                         : m,
@@ -297,9 +297,10 @@ export function AIAssistantPanel() {
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-panel">
         <div className="flex items-center gap-2">
           <Sparkles size={14} />
-          <span className="text-sm font-semibold">
-            {USE_V2 ? "Apter Intelligence" : "Apter AI"}
-          </span>
+          <div>
+            <span className="text-sm font-semibold">Apter Intelligence</span>
+            <span className="block text-[9px] text-muted-foreground leading-tight">Institutional-grade analysis</span>
+          </div>
           {USE_V2 && (
             <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded px-1 py-0.5 font-mono">
               LIVE
@@ -354,11 +355,7 @@ export function AIAssistantPanel() {
           <div className="space-y-3">
             <div className="text-center text-muted-foreground text-sm py-4">
               <Sparkles size={24} className="mx-auto mb-2 opacity-40" />
-              <p>
-                {USE_V2
-                  ? "Ask about any stock or market condition \u2014 I\u2019ll pull live data and provide institutional-grade analysis."
-                  : "Ask about any stock, market conditions, or financial metric \u2014 I\u2019ll pull the data and break it down."}
-              </p>
+              <p>Institutional-grade financial analysis. Ask about any stock, market conditions, or financial metric.</p>
             </div>
             <AIPromptCards onSelect={(prompt) => handleSubmit(prompt)} />
           </div>
