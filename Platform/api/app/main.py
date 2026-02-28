@@ -12,6 +12,7 @@ from app.routes import subscriptions, admin, profile
 from app.routes import stripe as stripe_routes
 from app.routes import scores, quotes, ai, health, auth_refresh
 from app.routes import ai_assistant
+from app.routes import apter_intelligence as apter_intelligence_routes
 from app.routes import rating as rating_routes
 from app.routes import password_reset
 from app.routes import data as data_routes
@@ -111,6 +112,7 @@ app.include_router(quotes.router)
 app.include_router(ai.router)              # /api/chat + /api/stocks/{ticker}/ai-overview
 app.include_router(stocks_routes.router)   # /api/stocks/{ticker}/snapshot + /refresh
 app.include_router(ai_assistant.router)     # /api/ai/chat, /api/ai/overview, /api/ai/intelligence/*
+app.include_router(apter_intelligence_routes.router)  # POST /api/apter-intelligence
 app.include_router(rating_routes.router)    # /api/rating/{ticker}
 app.include_router(password_reset.router)  # /auth/forgot-password, /auth/reset-password
 app.include_router(data_routes.router)      # /api/data/* tool endpoints
