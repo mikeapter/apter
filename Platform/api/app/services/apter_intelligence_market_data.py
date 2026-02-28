@@ -5,9 +5,10 @@ Isolated data layer for the Apter Intelligence chat endpoint.
 Does NOT share code with the existing market_data.py or data.py routes.
 
 Provider priority:
-  1. POLYGON_API_KEY  → Polygon.io REST v2/v3
-  2. FMP_API_KEY      → Financial Modeling Prep
-  3. Neither          → returns "unavailable" stubs
+  1. FINNHUB_API_KEY   → Finnhub.io
+  2. POLYGON_API_KEY   → Polygon.io REST v2/v3
+  3. FMP_API_KEY        → Financial Modeling Prep
+  4. None configured    → returns "unavailable" stubs
 """
 
 from __future__ import annotations
@@ -31,18 +32,22 @@ _TIMEOUT = 8.0  # seconds per request
 _MAX_RETRIES = 2
 _BACKOFF_BASE = 0.5  # seconds
 
+_FINNHUB_KEY: Optional[str] = None
 _POLYGON_KEY: Optional[str] = None
 _FMP_KEY: Optional[str] = None
 
 
 def _load_keys() -> None:
-    global _POLYGON_KEY, _FMP_KEY
+    global _FINNHUB_KEY, _POLYGON_KEY, _FMP_KEY
+    _FINNHUB_KEY = os.getenv("FINNHUB_API_KEY", "").strip() or None
     _POLYGON_KEY = os.getenv("POLYGON_API_KEY", "").strip() or None
     _FMP_KEY = os.getenv("FMP_API_KEY", "").strip() or None
 
 
 def _provider() -> str:
     _load_keys()
+    if _FINNHUB_KEY:
+        return "finnhub"
     if _POLYGON_KEY:
         return "polygon"
     if _FMP_KEY:
@@ -101,6 +106,133 @@ async def _request(
     return None
 
 
+async def _request_list(
+    client: httpx.AsyncClient, url: str, params: dict | None = None
+) -> Optional[list]:
+    """Same as _request but expects a JSON list response."""
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            resp = await client.get(url, params=params, timeout=_TIMEOUT)
+            if resp.status_code == 429:
+                wait = _BACKOFF_BASE * (2**attempt)
+                await asyncio.sleep(wait)
+                continue
+            if resp.status_code >= 500:
+                wait = _BACKOFF_BASE * (2**attempt)
+                await asyncio.sleep(wait)
+                continue
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            return data if isinstance(data, list) else None
+        except (httpx.TimeoutException, httpx.ConnectError) as exc:
+            if attempt < _MAX_RETRIES:
+                await asyncio.sleep(_BACKOFF_BASE * (2**attempt))
+            else:
+                logger.error("Request failed after retries: %s", exc)
+                return None
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Finnhub adapters
+# ---------------------------------------------------------------------------
+
+
+async def _finnhub_quote(client: httpx.AsyncClient, ticker: str) -> dict:
+    data = await _request(
+        client,
+        "https://finnhub.io/api/v1/quote",
+        params={"symbol": ticker, "token": _FINNHUB_KEY},
+    )
+    if not data or data.get("c") is None or data.get("c") == 0:
+        return {"ticker": ticker, "source": "finnhub", "error": "NO_QUOTE"}
+    return {
+        "ticker": ticker,
+        "price": data.get("c", 0),
+        "open": data.get("o", 0),
+        "high": data.get("h", 0),
+        "low": data.get("l", 0),
+        "prev_close": data.get("pc", 0),
+        "change": data.get("d", 0),
+        "change_pct": data.get("dp", 0),
+        "source": "finnhub",
+    }
+
+
+async def _finnhub_profile(client: httpx.AsyncClient, ticker: str) -> dict:
+    data = await _request(
+        client,
+        "https://finnhub.io/api/v1/stock/profile2",
+        params={"symbol": ticker, "token": _FINNHUB_KEY},
+    )
+    if not data or not data.get("name"):
+        return {"ticker": ticker, "source": "finnhub", "error": "NO_PROFILE"}
+    return {
+        "ticker": ticker,
+        "name": data.get("name", ticker),
+        "market_cap": data.get("marketCapitalization"),
+        "sector": data.get("finnhubIndustry", ""),
+        "country": data.get("country", ""),
+        "exchange": data.get("exchange", ""),
+        "ipo_date": data.get("ipo", ""),
+        "homepage": data.get("weburl", ""),
+        "source": "finnhub",
+    }
+
+
+async def _finnhub_fundamentals(client: httpx.AsyncClient, ticker: str) -> dict:
+    data = await _request(
+        client,
+        "https://finnhub.io/api/v1/stock/metric",
+        params={"symbol": ticker, "metric": "all", "token": _FINNHUB_KEY},
+    )
+    if not data or not data.get("metric"):
+        return {"ticker": ticker, "source": "finnhub", "error": "NO_FUNDAMENTALS"}
+    m = data["metric"]
+    return {
+        "ticker": ticker,
+        "pe_ratio": m.get("peNormalizedAnnual"),
+        "pb_ratio": m.get("pbAnnual"),
+        "ps_ratio": m.get("psAnnual"),
+        "dividend_yield": m.get("dividendYieldIndicatedAnnual"),
+        "roe": m.get("roeTTM"),
+        "roa": m.get("roaTTM"),
+        "gross_margin": m.get("grossMarginTTM"),
+        "operating_margin": m.get("operatingMarginTTM"),
+        "net_margin": m.get("netProfitMarginTTM"),
+        "debt_to_equity": m.get("totalDebt/totalEquityAnnual"),
+        "current_ratio": m.get("currentRatioAnnual"),
+        "revenue_growth": m.get("revenueGrowthTTMYoy"),
+        "eps_growth": m.get("epsGrowthTTMYoy"),
+        "52w_high": m.get("52WeekHigh"),
+        "52w_low": m.get("52WeekLow"),
+        "beta": m.get("beta"),
+        "market_cap": m.get("marketCapitalization"),
+        "source": "finnhub",
+    }
+
+
+async def _finnhub_earnings(client: httpx.AsyncClient, ticker: str) -> dict:
+    data = await _request_list(
+        client,
+        "https://finnhub.io/api/v1/stock/earnings",
+        params={"symbol": ticker, "limit": 4, "token": _FINNHUB_KEY},
+    )
+    if not data:
+        return {"ticker": ticker, "source": "finnhub", "error": "NO_EARNINGS"}
+    quarters = []
+    for r in data[:4]:
+        quarters.append({
+            "period": r.get("period", ""),
+            "actual_eps": r.get("actual"),
+            "estimate_eps": r.get("estimate"),
+            "surprise": r.get("surprise"),
+            "surprise_pct": r.get("surprisePercent"),
+        })
+    return {"ticker": ticker, "quarters": quarters, "source": "finnhub"}
+
+
 # ---------------------------------------------------------------------------
 # Polygon.io adapters
 # ---------------------------------------------------------------------------
@@ -150,7 +282,7 @@ async def _polygon_profile(client: httpx.AsyncClient, ticker: str) -> dict:
 async def _polygon_fundamentals(client: httpx.AsyncClient, ticker: str) -> dict:
     data = await _request(
         client,
-        f"https://api.polygon.io/vX/reference/financials",
+        "https://api.polygon.io/vX/reference/financials",
         params={
             "ticker": ticker,
             "limit": "1",
@@ -177,11 +309,9 @@ async def _polygon_fundamentals(client: httpx.AsyncClient, ticker: str) -> dict:
 
 
 async def _polygon_earnings(client: httpx.AsyncClient, ticker: str) -> dict:
-    # Polygon doesn't have a direct earnings-surprise endpoint on free tier,
-    # so we re-use financials quarterly
     data = await _request(
         client,
-        f"https://api.polygon.io/vX/reference/financials",
+        "https://api.polygon.io/vX/reference/financials",
         params={
             "ticker": ticker,
             "limit": "4",
@@ -209,12 +339,12 @@ async def _polygon_earnings(client: httpx.AsyncClient, ticker: str) -> dict:
 
 
 async def _fmp_quote(client: httpx.AsyncClient, ticker: str) -> dict:
-    data = await _request(
+    data = await _request_list(
         client,
         f"https://financialmodelingprep.com/api/v3/quote/{ticker}",
         params={"apikey": _FMP_KEY},
     )
-    if not data or not isinstance(data, list) or len(data) == 0:
+    if not data or len(data) == 0:
         return {"ticker": ticker, "source": "fmp", "error": "NO_QUOTE"}
     r = data[0]
     return {
@@ -233,12 +363,12 @@ async def _fmp_quote(client: httpx.AsyncClient, ticker: str) -> dict:
 
 
 async def _fmp_profile(client: httpx.AsyncClient, ticker: str) -> dict:
-    data = await _request(
+    data = await _request_list(
         client,
         f"https://financialmodelingprep.com/api/v3/profile/{ticker}",
         params={"apikey": _FMP_KEY},
     )
-    if not data or not isinstance(data, list) or len(data) == 0:
+    if not data or len(data) == 0:
         return {"ticker": ticker, "source": "fmp", "error": "NO_PROFILE"}
     r = data[0]
     return {
@@ -253,12 +383,12 @@ async def _fmp_profile(client: httpx.AsyncClient, ticker: str) -> dict:
 
 
 async def _fmp_fundamentals(client: httpx.AsyncClient, ticker: str) -> dict:
-    data = await _request(
+    data = await _request_list(
         client,
         f"https://financialmodelingprep.com/api/v3/income-statement/{ticker}",
         params={"limit": "1", "apikey": _FMP_KEY},
     )
-    if not data or not isinstance(data, list) or len(data) == 0:
+    if not data or len(data) == 0:
         return {"ticker": ticker, "source": "fmp", "error": "NO_FUNDAMENTALS"}
     r = data[0]
     return {
@@ -275,12 +405,12 @@ async def _fmp_fundamentals(client: httpx.AsyncClient, ticker: str) -> dict:
 
 
 async def _fmp_earnings(client: httpx.AsyncClient, ticker: str) -> dict:
-    data = await _request(
+    data = await _request_list(
         client,
         f"https://financialmodelingprep.com/api/v3/income-statement/{ticker}",
         params={"period": "quarter", "limit": "4", "apikey": _FMP_KEY},
     )
-    if not data or not isinstance(data, list) or len(data) == 0:
+    if not data or len(data) == 0:
         return {"ticker": ticker, "source": "fmp", "error": "NO_EARNINGS"}
     quarters = []
     for r in data:
@@ -312,45 +442,51 @@ def _unavailable(ticker: str, endpoint: str) -> dict:
 # Public API — provider-agnostic
 # ---------------------------------------------------------------------------
 
+_DISPATCH = {
+    "finnhub": {
+        "quote": _finnhub_quote,
+        "profile": _finnhub_profile,
+        "fundamentals": _finnhub_fundamentals,
+        "earnings": _finnhub_earnings,
+    },
+    "polygon": {
+        "quote": _polygon_quote,
+        "profile": _polygon_profile,
+        "fundamentals": _polygon_fundamentals,
+        "earnings": _polygon_earnings,
+    },
+    "fmp": {
+        "quote": _fmp_quote,
+        "profile": _fmp_profile,
+        "fundamentals": _fmp_fundamentals,
+        "earnings": _fmp_earnings,
+    },
+}
+
+
+async def _fetch(endpoint: str, ticker: str) -> dict:
+    provider = _provider()
+    fns = _DISPATCH.get(provider)
+    if not fns:
+        return _unavailable(ticker, endpoint)
+    async with httpx.AsyncClient() as client:
+        return await fns[endpoint](client, ticker)
+
 
 async def get_quote(ticker: str) -> dict:
-    provider = _provider()
-    async with httpx.AsyncClient() as client:
-        if provider == "polygon":
-            return await _polygon_quote(client, ticker)
-        if provider == "fmp":
-            return await _fmp_quote(client, ticker)
-    return _unavailable(ticker, "quote")
+    return await _fetch("quote", ticker)
 
 
 async def get_profile(ticker: str) -> dict:
-    provider = _provider()
-    async with httpx.AsyncClient() as client:
-        if provider == "polygon":
-            return await _polygon_profile(client, ticker)
-        if provider == "fmp":
-            return await _fmp_profile(client, ticker)
-    return _unavailable(ticker, "profile")
+    return await _fetch("profile", ticker)
 
 
 async def get_fundamentals(ticker: str) -> dict:
-    provider = _provider()
-    async with httpx.AsyncClient() as client:
-        if provider == "polygon":
-            return await _polygon_fundamentals(client, ticker)
-        if provider == "fmp":
-            return await _fmp_fundamentals(client, ticker)
-    return _unavailable(ticker, "fundamentals")
+    return await _fetch("fundamentals", ticker)
 
 
 async def get_earnings(ticker: str) -> dict:
-    provider = _provider()
-    async with httpx.AsyncClient() as client:
-        if provider == "polygon":
-            return await _polygon_earnings(client, ticker)
-        if provider == "fmp":
-            return await _fmp_earnings(client, ticker)
-    return _unavailable(ticker, "earnings")
+    return await _fetch("earnings", ticker)
 
 
 async def get_all_data(ticker: str) -> Dict[str, Any]:
