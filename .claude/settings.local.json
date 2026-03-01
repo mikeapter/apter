@@ -14,7 +14,8 @@
       "Bash(git merge:*)",
       "Bash(git add Platform/web/app/components/stock/StockDetailView.tsx)",
       "Bash(git rebase --continue)",
-      "Bash(git add -A)"
+      "Bash(git add -A)",
+      "Bash(git rm Platform/web/lib/finnhub.server.ts)"
     ]
   }
 }
