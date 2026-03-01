@@ -69,7 +69,7 @@ async def apter_intelligence_chat(
     user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     logger.info(
-        "Apter Intelligence request: user=%s question=%s tickers=%s",
+        "[Apter Intelligence] Request: user=%s question='%s' tickers=%s",
         user.id,
         body.question[:80],
         body.tickers,
@@ -81,10 +81,16 @@ async def apter_intelligence_chat(
             tickers=body.tickers,
         )
     except Exception as exc:
-        logger.exception("Apter Intelligence error: %s", exc)
+        logger.exception("[Apter Intelligence] Error: %s", exc)
         raise HTTPException(
             status_code=502,
             detail="Apter Intelligence service temporarily unavailable. Please try again.",
         )
 
+    logger.info(
+        "[Apter Intelligence] Response: data_quality=%s provider=%s model=%s",
+        result.get("meta", {}).get("data_quality"),
+        result.get("context", {}).get("meta", {}).get("provider"),
+        result.get("meta", {}).get("model"),
+    )
     return result
