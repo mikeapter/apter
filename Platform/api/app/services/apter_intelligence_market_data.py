@@ -47,11 +47,21 @@ def _load_keys() -> None:
 def _provider() -> str:
     _load_keys()
     if _FINNHUB_KEY:
+        logger.info("[Apter Intelligence] Provider: finnhub (key length=%d)", len(_FINNHUB_KEY))
         return "finnhub"
     if _POLYGON_KEY:
+        logger.info("[Apter Intelligence] Provider: polygon")
         return "polygon"
     if _FMP_KEY:
+        logger.info("[Apter Intelligence] Provider: fmp")
         return "fmp"
+    logger.warning(
+        "[Apter Intelligence] No data provider configured — "
+        "FINNHUB_API_KEY=%s, POLYGON_API_KEY=%s, FMP_API_KEY=%s",
+        "SET" if os.getenv("FINNHUB_API_KEY") else "EMPTY",
+        "SET" if os.getenv("POLYGON_API_KEY") else "EMPTY",
+        "SET" if os.getenv("FMP_API_KEY") else "EMPTY",
+    )
     return "none"
 
 
@@ -425,6 +435,54 @@ async def _fmp_earnings(client: httpx.AsyncClient, ticker: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Finnhub symbol search (company name → ticker resolution)
+# ---------------------------------------------------------------------------
+
+
+async def search_symbol(query: str) -> Optional[str]:
+    """
+    Use Finnhub /search to resolve a company name or keyword to a ticker symbol.
+    Returns the best-matching US stock ticker, or None.
+    """
+    _load_keys()
+    if not _FINNHUB_KEY:
+        logger.warning("[Apter Intelligence] Cannot search symbols — no FINNHUB_API_KEY")
+        return None
+
+    try:
+        async with httpx.AsyncClient() as client:
+            data = await _request(
+                client,
+                "https://finnhub.io/api/v1/search",
+                params={"q": query, "token": _FINNHUB_KEY},
+            )
+        if not data or not data.get("result"):
+            logger.info("[Apter Intelligence] Symbol search for '%s' returned no results", query)
+            return None
+
+        # Prefer "Common Stock" types on major US exchanges
+        for r in data["result"]:
+            symbol = r.get("symbol", "")
+            rtype = r.get("type", "")
+            # Skip non-stock results, ADRs with suffixes, crypto, etc.
+            if rtype in ("Common Stock", "EQS") and "." not in symbol:
+                logger.info("[Apter Intelligence] Symbol search '%s' → %s (%s)", query, symbol, r.get("description", ""))
+                return symbol
+
+        # Fallback: return first result regardless of type
+        first = data["result"][0]
+        symbol = first.get("symbol", "")
+        if symbol and "." not in symbol:
+            logger.info("[Apter Intelligence] Symbol search '%s' → %s (fallback)", query, symbol)
+            return symbol
+
+        return None
+    except Exception as exc:
+        logger.error("[Apter Intelligence] Symbol search error for '%s': %s", query, exc)
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Unavailable stubs
 # ---------------------------------------------------------------------------
 
@@ -468,9 +526,17 @@ async def _fetch(endpoint: str, ticker: str) -> dict:
     provider = _provider()
     fns = _DISPATCH.get(provider)
     if not fns:
+        logger.warning("[Apter Intelligence] No dispatch for provider=%s, ticker=%s, endpoint=%s", provider, ticker, endpoint)
         return _unavailable(ticker, endpoint)
-    async with httpx.AsyncClient() as client:
-        return await fns[endpoint](client, ticker)
+    try:
+        async with httpx.AsyncClient() as client:
+            result = await fns[endpoint](client, ticker)
+            if result.get("error"):
+                logger.warning("[Apter Intelligence] %s/%s/%s returned error: %s", provider, ticker, endpoint, result.get("error"))
+            return result
+    except Exception as exc:
+        logger.error("[Apter Intelligence] Exception fetching %s/%s/%s: %s", provider, ticker, endpoint, exc)
+        return _unavailable(ticker, endpoint)
 
 
 async def get_quote(ticker: str) -> dict:
@@ -541,6 +607,11 @@ async def build_context(tickers: List[str]) -> Dict[str, Any]:
                         has_live = True
 
     data_quality = "live" if has_live else ("partial" if provider != "none" else "unavailable")
+
+    logger.info(
+        "[Apter Intelligence] build_context: tickers=%s provider=%s data_quality=%s has_live=%s",
+        tickers, provider, data_quality, has_live,
+    )
 
     return {
         "tickers": context,
