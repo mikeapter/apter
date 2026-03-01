@@ -87,8 +87,8 @@ export async function apiPost<T>(
       ...init,
       method: "POST",
       headers: mergedHeaders(init?.headers, token),
-      body: JSON.stringify(body ?? {}),
       credentials: "include",
+      body: JSON.stringify(body ?? {}),
       cache: "no-store",
     });
 

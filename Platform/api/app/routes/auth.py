@@ -21,6 +21,12 @@ from app.services.auth_service import (
     verify_password,
 )
 from app.services.hubspot_service import sync_contact_to_hubspot
+from app.auth.auth_core import (
+    set_access_cookie,
+    set_session_cookie,
+    clear_access_and_session_cookies,
+    reject_if_reusing_password,
+)
 
 from app.security.config import (
     ACCESS_TOKEN_MINUTES,
@@ -84,7 +90,9 @@ class RegisterResponse(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    # Accept both field names for backward compat
     remember_device: bool = False
+    keep_signed_in: bool = False
 
 
 class Login2FARequest(BaseModel):
@@ -100,21 +108,22 @@ def _set_refresh_cookie(
     refresh_token: str,
     remember_device: bool = False,
 ) -> None:
-    """Set the refresh token as an HTTP-only secure cookie."""
-    max_age = (
-        REMEMBER_TOKEN_EXPIRE_DAYS * 86400
-        if remember_device
-        else REFRESH_TOKEN_DAYS * 86400
-    )
-    response.set_cookie(
+    """Set the refresh token as an HTTP-only secure cookie.
+
+    If remember_device is True, sets a persistent cookie (survives browser close).
+    Otherwise sets a session cookie (cleared on browser close).
+    """
+    kwargs: dict = dict(
         key=REFRESH_COOKIE_NAME,
         value=refresh_token,
         httponly=True,
         secure=IS_PRODUCTION,
         samesite="lax",
         path=REFRESH_COOKIE_PATH,
-        max_age=max_age,
     )
+    if remember_device:
+        kwargs["max_age"] = REMEMBER_TOKEN_EXPIRE_DAYS * 86400
+    response.set_cookie(**kwargs)
 
 
 def _clear_refresh_cookie(response: Response) -> None:
@@ -166,6 +175,17 @@ def _issue_token_pair(user_id: int, remember_device: bool = False) -> dict:
     }
 
 
+def _set_auth_cookies(
+    response: Response,
+    access_token: str,
+    remember_device: bool = False,
+) -> None:
+    """Set apter_at (access token) and apter_session (indicator) cookies."""
+    max_age_days = REMEMBER_TOKEN_EXPIRE_DAYS if remember_device else REFRESH_TOKEN_DAYS
+    set_access_cookie(response, access_token, persistent=remember_device)
+    set_session_cookie(response, persistent=remember_device, max_age_days=max_age_days)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # REGISTER (Observer by default)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -215,6 +235,9 @@ def register(
 
     # Set refresh token as HTTP-only cookie
     _set_refresh_cookie(response, tokens["refresh_token"])
+
+    # Set access token + session indicator cookies
+    _set_auth_cookies(response, tokens["access_token"])
 
     audit_log(
         "register",
@@ -299,10 +322,16 @@ def login(
     # Successful login — clear lockout counter
     login_lockout.record_success(request, normalized_email)
 
-    tokens = _issue_token_pair(user.id, remember_device=payload.remember_device)
+    # Resolve keep_signed_in: accept either field for backward compat
+    keep = payload.keep_signed_in or payload.remember_device
+
+    tokens = _issue_token_pair(user.id, remember_device=keep)
 
     # Set refresh token as HTTP-only cookie
-    _set_refresh_cookie(response, tokens["refresh_token"], remember_device=payload.remember_device)
+    _set_refresh_cookie(response, tokens["refresh_token"], remember_device=keep)
+
+    # Set access token + session indicator cookies
+    _set_auth_cookies(response, tokens["access_token"], remember_device=keep)
 
     audit_log(
         "auth_success",
@@ -399,6 +428,9 @@ def login_2fa(
     # Set refresh token as HTTP-only cookie
     _set_refresh_cookie(response, tokens["refresh_token"], remember_device=payload.trust_device)
 
+    # Set access token + session indicator cookies
+    _set_auth_cookies(response, tokens["access_token"], remember_device=payload.trust_device)
+
     audit_log(
         "auth_success",
         request=request,
@@ -415,11 +447,12 @@ def login_2fa(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LOGOUT — clear refresh token cookie + revoke server-side
+# LOGOUT — clear refresh token cookie + access/session cookies
 # ─────────────────────────────────────────────────────────────────────────────
 @router.post("/logout")
 def logout(request: Request, response: Response):
     _clear_refresh_cookie(response)
+    clear_access_and_session_cookies(response)
     return {"detail": "Logged out"}
 
 
@@ -434,3 +467,61 @@ def me(user: User = Depends(get_current_user)):
         "tier": user.subscription_tier,
         "status": user.subscription_status,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PASSWORD RESET
+# Block reusing the same current password.
+# ─────────────────────────────────────────────────────────────────────────────
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        if len(v) < 10:
+            raise ValueError("Password must be at least 10 characters")
+        return v
+
+
+@router.post("/reset-password")
+def reset_password(
+    payload: ResetPasswordRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """
+    Reset password using a one-time reset token.
+    Blocks reuse of the current password and revokes all existing sessions.
+
+    NOTE: This endpoint requires a valid reset token issued by a
+    "forgot password" email flow. Until that flow is fully implemented,
+    this endpoint validates the token format but will reject unknown tokens.
+    For now, the forgot-password page directs users to support@apterfinancial.com.
+    """
+    # TODO: Implement reset token validation against DB.
+    # When implementing, create a password_reset_tokens table with:
+    #   - token (hashed), user_id, expires_at, used (bool)
+    # Then uncomment and adapt the code below.
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Invalid or expired reset token. Please request a new password reset.",
+    )
+
+    # --- Full implementation for when reset tokens are wired up ---
+    # user = db_validate_reset_token(payload.token, db)
+    # if not user:
+    #     raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    #
+    # # Block same password reuse
+    # reject_if_reusing_password(payload.new_password, user.hashed_password)
+    #
+    # user.hashed_password = hash_password(payload.new_password)
+    # db.commit()
+    #
+    # # Revoke all sessions so old tokens/cookies die
+    # refresh_token_store.revoke_all_for_user(user.id)
+    # clear_access_and_session_cookies(response)
+    #
+    # return {"ok": True}

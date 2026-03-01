@@ -19,6 +19,7 @@ from app.db.session import engine
 
 # Import models so they register on Base.metadata
 from app.models.user import User  # noqa: F401
+from app.models.refresh_session import RefreshSession  # noqa: F401
 
 logger = logging.getLogger(__name__)
 

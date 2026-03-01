@@ -14,6 +14,7 @@ also accepted as a fallback.
 from __future__ import annotations
 
 import logging
+import time
 from datetime import timedelta
 from typing import Optional
 
@@ -38,6 +39,7 @@ from app.security.config import (
 from app.security.rate_limit import get_refresh_limiter
 from app.security.tokens import refresh_token_store
 from app.security.audit import audit_log
+from app.auth.auth_core import set_access_cookie, set_session_cookie
 
 logger = logging.getLogger(__name__)
 
@@ -61,20 +63,22 @@ def _set_refresh_cookie(
     refresh_token: str,
     remember_device: bool = False,
 ) -> None:
-    max_age = (
-        REMEMBER_TOKEN_EXPIRE_DAYS * 86400
-        if remember_device
-        else REFRESH_TOKEN_DAYS * 86400
-    )
-    response.set_cookie(
+    """Set the refresh token as an HTTP-only secure cookie.
+
+    If remember_device is True, sets a persistent cookie (survives browser close).
+    Otherwise sets a session cookie (cleared on browser close).
+    """
+    kwargs: dict = dict(
         key=REFRESH_COOKIE_NAME,
         value=refresh_token,
         httponly=True,
         secure=IS_PRODUCTION,
         samesite="lax",
         path=REFRESH_COOKIE_PATH,
-        max_age=max_age,
     )
+    if remember_device:
+        kwargs["max_age"] = REMEMBER_TOKEN_EXPIRE_DAYS * 86400
+    response.set_cookie(**kwargs)
 
 
 @router.post("/refresh", response_model=RefreshResponse)
@@ -144,7 +148,7 @@ def refresh_token(
     # Verify user still exists and is active
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        logger.warning("Refresh failed — user %s not found", user_id)
+        logger.warning("Refresh failed — user %s not found", user_id_str)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
@@ -158,7 +162,6 @@ def refresh_token(
         )
 
     # Determine refresh token duration from original token
-    import time
     exp = token_payload.get("exp", 0)
     iat = token_payload.get("iat", time.time())
     original_duration = exp - iat if exp and iat else REFRESH_TOKEN_DAYS * 86400
@@ -191,6 +194,11 @@ def refresh_token(
     # Set new refresh token cookie
     _set_refresh_cookie(response, new_refresh, remember_device=is_remember)
 
+    # Set access token + session indicator cookies
+    max_age_days = REMEMBER_TOKEN_EXPIRE_DAYS if is_remember else REFRESH_TOKEN_DAYS
+    set_access_cookie(response, new_access, persistent=is_remember)
+    set_session_cookie(response, persistent=is_remember, max_age_days=max_age_days)
+
     audit_log(
         "token_refresh",
         request=request,
@@ -198,7 +206,7 @@ def refresh_token(
         success=True,
     )
 
-    logger.info("Token refreshed for user %s", user_id)
+    logger.info("Token refresh for user %s (remember=%s)", user_id_str, is_remember)
 
     return RefreshResponse(
         access_token=new_access,

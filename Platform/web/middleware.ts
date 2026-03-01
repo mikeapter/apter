@@ -45,8 +45,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for session indicator cookie
-  const hasSession = request.cookies.get("apter_session");
+  // Check for session indicator cookie (set by server and client)
+  // The server sets apter_session=1 alongside the httpOnly auth cookies.
+  // We also check apter_rt as a fallback since it's httpOnly but readable by middleware.
+  const hasSession = request.cookies.get("apter_session") || request.cookies.get("apter_rt");
 
   if (!hasSession) {
     const loginUrl = new URL("/login", request.url);
