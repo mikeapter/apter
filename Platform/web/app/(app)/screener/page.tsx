@@ -3,8 +3,9 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
-import { getMockPrice, getMockGrade } from "../../lib/stockData";
+import { getMockGrade } from "../../lib/stockData";
 import { GradeBadge } from "../../components/ui/GradeBadge";
+import ScreenerPriceCell from "../../components/screener/ScreenerPriceCell";
 import { COMPLIANCE } from "../../lib/compliance";
 
 type ScreenerStock = {
@@ -12,7 +13,6 @@ type ScreenerStock = {
   company: string;
   sector: string;
   marketCap: string;
-  price: number;
   grade: number;
 };
 
@@ -34,7 +34,6 @@ const UNIVERSE: ScreenerStock[] = [
   { ticker: "LLY", company: "Eli Lilly & Co.", sector: "Healthcare", marketCap: "Large" },
 ].map((s) => ({
   ...s,
-  price: getMockPrice(s.ticker),
   grade: getMockGrade(s.ticker),
 }));
 
@@ -42,14 +41,8 @@ const SECTORS = ["All", ...Array.from(new Set(UNIVERSE.map((s) => s.sector))).so
 const SORT_OPTIONS = [
   { label: "Grade (High to Low)", value: "grade-desc" },
   { label: "Grade (Low to High)", value: "grade-asc" },
-  { label: "Price (High to Low)", value: "price-desc" },
-  { label: "Price (Low to High)", value: "price-asc" },
   { label: "Ticker (A-Z)", value: "ticker-asc" },
 ];
-
-function formatCurrency(n: number): string {
-  return n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
-}
 
 export default function ScreenerPage() {
   const [sector, setSector] = useState("All");
@@ -72,7 +65,6 @@ export default function ScreenerPage() {
     filtered.sort((a, b) => {
       let cmp = 0;
       if (field === "grade") cmp = a.grade - b.grade;
-      else if (field === "price") cmp = a.price - b.price;
       else cmp = a.ticker.localeCompare(b.ticker);
       return dir === "desc" ? -cmp : cmp;
     });
@@ -172,7 +164,9 @@ export default function ScreenerPage() {
                     </td>
                     <td className="px-4 py-2.5 text-muted-foreground">{s.company}</td>
                     <td className="px-4 py-2.5 text-muted-foreground">{s.sector}</td>
-                    <td className="text-right px-4 py-2.5 font-mono">{formatCurrency(s.price)}</td>
+                    <td className="text-right px-4 py-2.5">
+                      <ScreenerPriceCell symbol={s.ticker} />
+                    </td>
                     <td className="text-center px-4 py-2.5">
                       <GradeBadge grade={s.grade} />
                     </td>

@@ -30,6 +30,9 @@ export function PublicHeader() {
       </Link>
 
       <div className="flex items-center gap-2">
+        <Link href="/performance" className="bt-button hover:bg-muted">
+          Performance
+        </Link>
         {hasToken ? (
           <Link
             href="/dashboard"

@@ -1,10 +1,30 @@
 /**
- * Typed AI API client with SSE streaming support.
+ * Typed Apter Intelligence API client with SSE streaming support.
  */
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+export type SectorNote = {
+  sector: string;
+  note: string;
+};
+
+export type WatchlistFocusItem = {
+  ticker: string;
+  note: string;
+};
+
+export type MarketRegime = {
+  label: "RISK-ON" | "NEUTRAL" | "RISK-OFF";
+  rationale: string[];
+};
+
+export type SectorRotation = {
+  strong: SectorNote[];
+  weak: SectorNote[];
+};
 
 export type AIResponse = {
   message_id?: string;
@@ -19,6 +39,13 @@ export type AIResponse = {
   scenarios?: string[] | null;
   comparisons?: string[] | null;
   cached?: boolean;
+
+  // Daily Brief structured sections
+  market_regime?: MarketRegime | null;
+  breadth_internals?: string[] | null;
+  sector_rotation?: SectorRotation | null;
+  key_drivers?: string[] | null;
+  watchlist_focus?: WatchlistFocusItem[] | null;
 };
 
 export type ChatRequest = {
@@ -40,6 +67,61 @@ export type SSEEvent =
   | { type: "token"; content: string }
   | { type: "replace"; content: string }
   | { type: "done"; message_id: string; full_text: string };
+
+// Stock Intelligence Brief types
+export type RiskTag = { category: string; level: "Low" | "Moderate" | "Elevated" };
+
+export type StockIntelligenceBrief = {
+  ticker: string;
+  executive_summary: string;
+  key_drivers: string[];
+  risk_tags: RiskTag[];
+  regime_context: string;
+  what_to_monitor: string[];
+  snapshot: Record<string, string | number | null>;
+  as_of: string;
+  disclaimer: string;
+  data_sources: string[];
+  cached?: boolean;
+};
+
+// Market Intelligence Brief types
+export type MarketIntelligenceBrief = {
+  executive_summary: string;
+  risk_dashboard: {
+    regime: string;
+    volatility_context: string;
+    breadth_context: string;
+  };
+  catalysts: string[];
+  what_changed: string[];
+  as_of: string;
+  disclaimer: string;
+  data_sources: string[];
+  cached?: boolean;
+};
+
+// Apter Rating types
+export type AptRatingComponent = {
+  score: number;
+  weight: number;
+  drivers: string[];
+};
+
+export type AptRatingResponse = {
+  ticker: string;
+  rating: number;
+  band: string;
+  components: {
+    growth: AptRatingComponent;
+    profitability: AptRatingComponent;
+    balance_sheet: AptRatingComponent;
+    momentum: AptRatingComponent;
+    risk: AptRatingComponent;
+  };
+  as_of: string;
+  disclaimer: string;
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -70,7 +152,7 @@ function authHeaders(extra?: Record<string, string>): Record<string, string> {
 }
 
 // ---------------------------------------------------------------------------
-// Chat (JSON — non-streaming)
+// Chat (JSON)
 // ---------------------------------------------------------------------------
 
 export async function chatJSON(req: ChatRequest): Promise<AIResponse> {
@@ -171,7 +253,7 @@ export async function chatStream(
 }
 
 // ---------------------------------------------------------------------------
-// Overview (cached briefing)
+// Overview (legacy)
 // ---------------------------------------------------------------------------
 
 export async function fetchOverview(
@@ -184,11 +266,67 @@ export async function fetchOverview(
 
   const res = await fetch(
     `${apiBase()}/api/ai/overview?${params.toString()}`,
-    {
-      method: "GET",
-      headers: authHeaders(),
-      cache: "no-store",
-    },
+    { method: "GET", headers: authHeaders(), cache: "no-store" },
+  );
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `${res.status} ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Stock Intelligence Brief
+// ---------------------------------------------------------------------------
+
+export async function fetchStockIntelligence(
+  ticker: string,
+): Promise<StockIntelligenceBrief> {
+  const res = await fetch(
+    `${apiBase()}/api/ai/intelligence/stock?ticker=${encodeURIComponent(ticker)}`,
+    { method: "GET", headers: authHeaders(), cache: "no-store" },
+  );
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `${res.status} ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Market Intelligence Brief
+// ---------------------------------------------------------------------------
+
+export async function fetchMarketIntelligence(
+  mode: "daily" | "weekly" = "daily",
+): Promise<MarketIntelligenceBrief> {
+  const res = await fetch(
+    `${apiBase()}/api/ai/intelligence/market?mode=${mode}`,
+    { method: "GET", headers: authHeaders(), cache: "no-store" },
+  );
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `${res.status} ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Apter Rating
+// ---------------------------------------------------------------------------
+
+export async function fetchAptRating(
+  ticker: string,
+): Promise<AptRatingResponse> {
+  const res = await fetch(
+    `${apiBase()}/api/rating/${encodeURIComponent(ticker)}`,
+    { method: "GET", headers: authHeaders(), cache: "no-store" },
   );
 
   if (!res.ok) {

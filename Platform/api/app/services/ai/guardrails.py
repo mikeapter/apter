@@ -25,35 +25,36 @@ logger = logging.getLogger(__name__)
 _ADVICE_ACTION: list[re.Pattern] = [
     re.compile(p, re.IGNORECASE)
     for p in [
-        r"\b(buy|sell|hold|accumulate|dump|add|trim|short(?:ing)?|long(?:ing)?)\b",
-        r"\b(enter|exit)\b(?!.*(?:the market|a position).*(?:was|were|has been))",
-        r"\btake profit\b",
-        r"\bstop loss\b",
-        r"\byou should\b",
-        r"\bi recommend\b",
-        r"\bi suggest\b",
-        r"\bmy advice\b",
-        r"\bbest move\b",
-        r"\boptimal\b",
-        r"\bperfect time\b",
-        r"\btime to buy\b",
-        r"\bprice target\b.*\b(buy|sell|until|at)\b",
-        r"\btarget price\b.*\b(buy|sell|until|at)\b",
+        # Direct action directives — "buy AAPL", "sell now", "hold the stock"
+        r"\b(buy|sell)\s+(the\s+)?(stock|shares|position|calls?|puts?|options?|now|here|at)\b",
+        r"\b(accumulate|dump)\s+(shares?|the\s+stock|more|now)\b",
+        r"\btrim\s+(your|the)?\s*(position|shares?|holdings?)\b",
+        # "you should" / "I recommend" — actual directive phrasing
+        r"\byou\s+should\b",
+        r"\bi\s+recommend\b",
+        r"\bi\s+suggest\b",
+        r"\bmy\s+advice\b",
+        r"\bbest\s+move\b",
+        r"\bperfect\s+time\b",
+        r"\btime\s+to\s+(buy|sell)\b",
+        r"\btake\s+profit\b",
+        r"\bstop\s+loss\b",
+        r"\bprice\s+target\b.*\b(buy|sell|until|at)\b",
+        r"\btarget\s+price\b.*\b(buy|sell|until|at)\b",
     ]
 ]
 
 _PORTFOLIO_GUIDANCE: list[re.Pattern] = [
     re.compile(p, re.IGNORECASE)
     for p in [
-        r"\brebalance\b",
-        r"\ballocate\b",
+        r"\brebalance\s+your\b",
+        r"\ballocate\s+(your|\d+%)\b",
         r"\b(position\s+siz(e|ing))\b",
         r"\bpercent\s+allocation\b",
         r"\bputt?(?:ing)?\s+\d+%\s+in\b",
         r"\byour\s+(portfolio|holdings|account)\b",
         r"\bbased\s+on\s+your\s+account\b",
         r"\bfor\s+your\s+(retirement|goals)\b",
-        r"\bweight\b(?=.*\b(portfolio|allocation|position)\b)",
     ]
 ]
 
@@ -71,13 +72,12 @@ _SUITABILITY: list[re.Pattern] = [
 _OVERCONFIDENCE: list[re.Pattern] = [
     re.compile(p, re.IGNORECASE)
     for p in [
-        r"\bguaranteed\b",
+        r"\bguaranteed\s+(returns?|gains?|profit|growth)\b",
         r"\bcan'?t\s+miss\b",
         r"\bsure\s+thing\b",
-        r"\brisk[\s-]?free\b",
-        r"\b(definitely\s+will|will\s+definitely)\b",
-        r"\bwill\s+go\s+up\b",
-        r"\bwill\s+outperform\b",
+        r"\brisk[\s-]?free\s+(return|investment|profit)\b",
+        r"\b(definitely\s+will|will\s+definitely)\s+(go\s+up|rise|outperform|beat)\b",
+        r"\bwill\s+(go\s+up|outperform|beat\s+the\s+market)\b",
     ]
 ]
 

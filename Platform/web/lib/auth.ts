@@ -1,10 +1,14 @@
 /**
  * Client-side auth token helpers.
  *
- * Token is stored in localStorage for backward compat (AuthGuard, etc.).
- * The *primary* auth mechanism is now httpOnly cookies (apter_at / apter_rt)
- * set by the backend. This module also sets a non-httpOnly apter_session=1
- * cookie so the Next.js middleware can detect an active session.
+ * Access token: stored in localStorage (short-lived, 10 min).
+ * Refresh token: stored in an HTTP-only cookie set by the API (not accessible
+ * from JS). The browser sends it automatically on /auth/* requests.
+ * Session cookie: lightweight indicator for Next.js middleware SSR redirect.
+ *
+ * The server owns all cookie management (apter_at, apter_refresh, apter_session)
+ * via Set-Cookie headers. We do NOT set cookies client-side to avoid
+ * overwriting the server's persistent cookie settings.
  */
 
 const LS_TOKEN = "apter_token";
@@ -30,7 +34,7 @@ export function getToken(): string | null {
 /**
  * Store auth token in localStorage for backward compat.
  *
- * The server owns all cookie management (apter_at, apter_rt, apter_session)
+ * The server owns all cookie management (apter_at, apter_refresh, apter_session)
  * via Set-Cookie headers. We do NOT set apter_session here to avoid
  * overwriting the server's persistent cookie with a session cookie.
  */
@@ -82,4 +86,10 @@ export function clearStoredUser(): void {
 export function logout(): void {
   clearToken();
   clearStoredUser();
+  // Clear the HTTP-only refresh cookie via the backend
+  try {
+    fetch("/auth/logout", { method: "POST", credentials: "include" });
+  } catch {
+    // Fire-and-forget
+  }
 }

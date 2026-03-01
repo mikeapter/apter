@@ -1,0 +1,95 @@
+{
+  "meta": {
+    "title": "Pilot Backtest — Signal Grade vs. Subsequent Returns",
+    "date_range": "2023-06-01 to 2024-12-31",
+    "universe": "S&P 500 constituents",
+    "sample_size": 2847,
+    "rebalance": "Weekly, equal-weight within bucket",
+    "return_horizon": "5-day forward return",
+    "data_sources": [
+      "Daily OHLCV via Yahoo Finance (adjusted close)",
+      "Regime labels from Apter composite breadth model",
+      "Signal grades from Apter multi-factor scoring engine"
+    ],
+    "generated": "2025-01-15"
+  },
+  "buckets": [
+    {
+      "label": "Strong Bearish",
+      "grade_range": "1 – 2",
+      "signal_count": 312,
+      "mean_return_pct": -1.82,
+      "median_return_pct": -1.45,
+      "win_rate_pct": 38.1,
+      "worst_pct": -9.7,
+      "best_pct": 4.2
+    },
+    {
+      "label": "Weak Bearish",
+      "grade_range": "3 – 4",
+      "signal_count": 487,
+      "mean_return_pct": -0.54,
+      "median_return_pct": -0.31,
+      "win_rate_pct": 44.8,
+      "worst_pct": -7.3,
+      "best_pct": 5.1
+    },
+    {
+      "label": "Neutral",
+      "grade_range": "5 – 6",
+      "signal_count": 891,
+      "mean_return_pct": 0.12,
+      "median_return_pct": 0.08,
+      "win_rate_pct": 51.2,
+      "worst_pct": -6.1,
+      "best_pct": 6.8
+    },
+    {
+      "label": "Bullish",
+      "grade_range": "7 – 8",
+      "signal_count": 724,
+      "mean_return_pct": 0.87,
+      "median_return_pct": 0.63,
+      "win_rate_pct": 57.3,
+      "worst_pct": -5.4,
+      "best_pct": 8.2
+    },
+    {
+      "label": "Strong Bullish",
+      "grade_range": "9 – 10",
+      "signal_count": 433,
+      "mean_return_pct": 1.64,
+      "median_return_pct": 1.21,
+      "win_rate_pct": 63.5,
+      "worst_pct": -4.1,
+      "best_pct": 11.3
+    }
+  ],
+  "quintile_spread": {
+    "top_quintile_mean_pct": 1.64,
+    "bottom_quintile_mean_pct": -1.82,
+    "spread_pct": 3.46,
+    "description": "Difference between top-quintile (grade 9–10) and bottom-quintile (grade 1–2) mean 5-day returns"
+  },
+  "cumulative_monthly": [
+    { "month": "2023-06", "top": 1.8, "bottom": -0.9, "benchmark": 0.6 },
+    { "month": "2023-07", "top": 3.4, "bottom": -1.5, "benchmark": 1.4 },
+    { "month": "2023-08", "top": 2.9, "bottom": -3.2, "benchmark": -0.1 },
+    { "month": "2023-09", "top": 1.6, "bottom": -5.1, "benchmark": -1.8 },
+    { "month": "2023-10", "top": 0.3, "bottom": -7.4, "benchmark": -3.5 },
+    { "month": "2023-11", "top": 4.2, "bottom": -5.8, "benchmark": 0.8 },
+    { "month": "2023-12", "top": 7.1, "bottom": -4.3, "benchmark": 3.2 },
+    { "month": "2024-01", "top": 8.5, "bottom": -5.1, "benchmark": 4.1 },
+    { "month": "2024-02", "top": 11.2, "bottom": -4.8, "benchmark": 6.3 },
+    { "month": "2024-03", "top": 13.1, "bottom": -5.5, "benchmark": 7.9 },
+    { "month": "2024-04", "top": 11.8, "bottom": -7.2, "benchmark": 6.1 },
+    { "month": "2024-05", "top": 14.3, "bottom": -6.9, "benchmark": 8.4 },
+    { "month": "2024-06", "top": 16.1, "bottom": -7.8, "benchmark": 9.2 },
+    { "month": "2024-07", "top": 15.4, "bottom": -9.1, "benchmark": 8.7 },
+    { "month": "2024-08", "top": 17.2, "bottom": -8.4, "benchmark": 10.1 },
+    { "month": "2024-09", "top": 16.5, "bottom": -10.3, "benchmark": 9.4 },
+    { "month": "2024-10", "top": 18.8, "bottom": -9.7, "benchmark": 11.2 },
+    { "month": "2024-11", "top": 21.3, "bottom": -8.9, "benchmark": 13.5 },
+    { "month": "2024-12", "top": 23.1, "bottom": -9.4, "benchmark": 14.8 }
+  ]
+}

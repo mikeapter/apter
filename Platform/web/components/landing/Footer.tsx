@@ -83,10 +83,18 @@ export default function Footer() {
               </li>
               <li>
                 <Link
-                  href="/disclaimer"
+                  href="/risk-disclosure"
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors duration-150"
                 >
-                  Disclaimer
+                  Risk Disclosure
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/about"
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors duration-150"
+                >
+                  About
                 </Link>
               </li>
             </ul>
@@ -100,7 +108,7 @@ export default function Footer() {
             <ul className="space-y-2">
               <li>
                 <Link
-                  href="mailto:support@apterfinancial.com"
+                  href="/contact"
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors duration-150"
                 >
                   Contact Us

@@ -1,11 +1,14 @@
+# Platform/api/app/routes/auth_refresh.py
 """
-Auth refresh endpoint for session stability.
+Auth refresh endpoint with token rotation.
 
-Supports two modes:
-  1) Cookie-based: reads apter_rt httpOnly cookie, issues new cookie pair
-  2) Bearer-based (legacy): reads Authorization header, issues new bearer token
+POST /auth/refresh — Exchange a one-time-use refresh token for a new
+access token + refresh token pair.  Reuse of a consumed refresh token
+triggers revocation of ALL tokens for that user (theft detection).
 
-Cookie-based refresh is preferred and used by the frontend silently on 401.
+The refresh token is read from the `apter_refresh` HTTP-only cookie.
+For backward compatibility, a JSON body `{"refresh_token": "..."}` is
+also accepted as a fallback.
 """
 
 from __future__ import annotations
@@ -13,95 +16,137 @@ from __future__ import annotations
 import logging
 import time
 from datetime import timedelta
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.dependencies import oauth2_scheme_optional
 from app.models.user import User
-from app.services.auth_service import create_access_token, decode_access_token
-from app.auth.auth_core import refresh_from_cookie
+from app.services.auth_service import (
+    create_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+)
+from app.security.config import (
+    ACCESS_TOKEN_MINUTES,
+    IS_PRODUCTION,
+    REFRESH_COOKIE_NAME,
+    REFRESH_COOKIE_PATH,
+    REFRESH_TOKEN_DAYS,
+)
+from app.security.rate_limit import get_refresh_limiter
+from app.security.tokens import refresh_token_store
+from app.security.audit import audit_log
+from app.auth.auth_core import set_access_cookie, set_session_cookie
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
 REMEMBER_TOKEN_EXPIRE_DAYS = 30
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: Optional[str] = None
 
 
 class RefreshResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    expires_in: int  # seconds
+    expires_in: int  # access token TTL in seconds
+
+
+def _set_refresh_cookie(
+    response: Response,
+    refresh_token: str,
+    remember_device: bool = False,
+) -> None:
+    """Set the refresh token as an HTTP-only secure cookie.
+
+    If remember_device is True, sets a persistent cookie (survives browser close).
+    Otherwise sets a session cookie (cleared on browser close).
+    """
+    kwargs: dict = dict(
+        key=REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        httponly=True,
+        secure=IS_PRODUCTION,
+        samesite="lax",
+        path=REFRESH_COOKIE_PATH,
+    )
+    if remember_device:
+        kwargs["max_age"] = REMEMBER_TOKEN_EXPIRE_DAYS * 86400
+    response.set_cookie(**kwargs)
 
 
 @router.post("/refresh", response_model=RefreshResponse)
 def refresh_token(
-    req: Request,
-    resp: Response,
-    token: str | None = Depends(oauth2_scheme_optional),
+    request: Request,
+    response: Response,
+    payload: RefreshRequest = RefreshRequest(),
     db: Session = Depends(get_db),
 ):
     """
-    Refresh the access token.
-
-    1) If apter_rt cookie is present: use cookie-based refresh (issues new cookie pair).
-    2) Else if Bearer token is present: use legacy bearer refresh.
-    3) Else: 401.
+    Rotate refresh token: consume the old one, issue a new pair.
+    If the old token was already consumed (reuse), revoke all user tokens.
     """
+    # Rate limit
+    get_refresh_limiter().check(request)
 
-    # --- Cookie-based refresh (preferred) ---
-    rt_cookie = req.cookies.get("apter_rt")
-    if rt_cookie:
-        try:
-            user_id = refresh_from_cookie(req, resp, db)
-            # Also return a bearer token for backward compat with localStorage
-            new_bearer = create_access_token(
-                data={"sub": str(user_id)},
-                expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
-            )
-            logger.info("Cookie-based refresh for user %s", user_id)
-            return RefreshResponse(
-                access_token=new_bearer,
-                token_type="bearer",
-                expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            )
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.warning("Cookie refresh error: %s", str(e))
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Refresh failed",
-            )
+    # Read refresh token: prefer HTTP-only cookie, fall back to body
+    raw_refresh = request.cookies.get(REFRESH_COOKIE_NAME)
+    if not raw_refresh and payload and payload.refresh_token:
+        raw_refresh = payload.refresh_token
 
-    # --- Legacy bearer-based refresh ---
-    if not token:
+    if not raw_refresh:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No token provided",
+            detail="No refresh token provided",
         )
 
+    # Decode the refresh token
     try:
-        payload = decode_access_token(token)
+        token_payload = decode_refresh_token(raw_refresh)
     except Exception as e:
         logger.info("Refresh failed — invalid token: %s", str(e))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
+            detail="Invalid or expired refresh token",
         )
 
-    user_id_str = payload.get("sub")
-    if not user_id_str:
+    user_id_str = token_payload.get("sub")
+    jti = token_payload.get("jti")
+
+    if not user_id_str or not jti:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
         )
 
-    user = db.query(User).filter(User.id == int(user_id_str)).first()
+    user_id = int(user_id_str)
+
+    # Validate and consume the refresh token (one-time use)
+    if not refresh_token_store.validate_and_consume(
+        raw_token=raw_refresh,
+        jti=jti,
+        user_id=user_id,
+    ):
+        audit_log(
+            "token_refresh_rejected",
+            request=request,
+            user_id=user_id,
+            success=False,
+            details={"reason": "invalid_or_reused_refresh_token", "jti": jti},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+
+    # Verify user still exists and is active
+    user = db.query(User).filter(User.id == user_id).first()
     if not user:
         logger.warning("Refresh failed — user %s not found", user_id_str)
         raise HTTPException(
@@ -109,27 +154,62 @@ def refresh_token(
             detail="User not found",
         )
 
-    # Determine token duration from original token's exp/iat
-    exp = payload.get("exp", 0)
-    iat = payload.get("iat", time.time())
-    original_duration = exp - iat if exp and iat else 3600
+    if not user.is_active:
+        logger.warning("Refresh failed — user %s suspended", user_id)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account suspended",
+        )
 
-    if original_duration > 86400:
-        expires_delta = timedelta(days=REMEMBER_TOKEN_EXPIRE_DAYS)
-        expires_in = REMEMBER_TOKEN_EXPIRE_DAYS * 86400
-    else:
-        expires_delta = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-        expires_in = ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    # Determine refresh token duration from original token
+    exp = token_payload.get("exp", 0)
+    iat = token_payload.get("iat", time.time())
+    original_duration = exp - iat if exp and iat else REFRESH_TOKEN_DAYS * 86400
+    is_remember = original_duration > 86400 * 15  # > 15 days = remember device
 
-    new_token = create_access_token(
+    # Issue new token pair
+    new_access = create_access_token(
         data={"sub": str(user.id)},
-        expires_delta=expires_delta,
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_MINUTES),
     )
 
-    logger.info("Bearer-based refresh for user %s", user_id_str)
+    if is_remember:
+        refresh_delta = timedelta(days=REMEMBER_TOKEN_EXPIRE_DAYS)
+    else:
+        refresh_delta = timedelta(days=REFRESH_TOKEN_DAYS)
+
+    new_refresh, new_jti, new_expires_at = create_refresh_token(
+        user_id=user.id,
+        expires_delta=refresh_delta,
+    )
+
+    # Store the new refresh token server-side
+    refresh_token_store.store(
+        raw_token=new_refresh,
+        user_id=user.id,
+        jti=new_jti,
+        expires_at=new_expires_at,
+    )
+
+    # Set new refresh token cookie
+    _set_refresh_cookie(response, new_refresh, remember_device=is_remember)
+
+    # Set access token + session indicator cookies
+    max_age_days = REMEMBER_TOKEN_EXPIRE_DAYS if is_remember else REFRESH_TOKEN_DAYS
+    set_access_cookie(response, new_access, persistent=is_remember)
+    set_session_cookie(response, persistent=is_remember, max_age_days=max_age_days)
+
+    audit_log(
+        "token_refresh",
+        request=request,
+        user_id=user.id,
+        success=True,
+    )
+
+    logger.info("Token refresh for user %s (remember=%s)", user_id_str, is_remember)
 
     return RefreshResponse(
-        access_token=new_token,
+        access_token=new_access,
         token_type="bearer",
-        expires_in=expires_in,
+        expires_in=ACCESS_TOKEN_MINUTES * 60,
     )

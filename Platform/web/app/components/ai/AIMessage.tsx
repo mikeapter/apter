@@ -41,11 +41,11 @@ export function AIMessage({ role, content, structured, messageId, isStreaming }:
     return (
       <div className="flex justify-start">
         <div className="max-w-[95%] rounded-md bg-panel border border-border px-3 py-2 space-y-2">
-          {/* Data sources — shown first so users see what the AI pulled */}
+          {/* Data sources */}
           {structured.data_used?.length > 0 && (
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground bg-panel-2 rounded px-2 py-1">
               <Database size={10} className="shrink-0" />
-              <span>Looking at: {structured.data_used.join(", ")}</span>
+              <span>Data sources: {structured.data_used.join(", ")}</span>
             </div>
           )}
 
@@ -68,7 +68,7 @@ export function AIMessage({ role, content, structured, messageId, isStreaming }:
               <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Risk Factors</div>
               <ul className="mt-0.5 text-sm space-y-0.5">
                 {structured.risk_flags.map((flag, i) => (
-                  <li key={i} className="text-orange-400/80">• {flag}</li>
+                  <li key={i} className="text-orange-400/80">&bull; {flag}</li>
                 ))}
               </ul>
             </div>
@@ -80,7 +80,7 @@ export function AIMessage({ role, content, structured, messageId, isStreaming }:
               <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Things to Monitor</div>
               <ul className="mt-0.5 text-sm space-y-0.5">
                 {structured.checklist.map((item, i) => (
-                  <li key={i} className="text-muted-foreground">• {item}</li>
+                  <li key={i} className="text-muted-foreground">&bull; {item}</li>
                 ))}
               </ul>
             </div>
@@ -92,13 +92,13 @@ export function AIMessage({ role, content, structured, messageId, isStreaming }:
               <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-medium">Scenarios</div>
               <ul className="mt-0.5 text-sm space-y-0.5">
                 {structured.scenarios.map((s, i) => (
-                  <li key={i} className="text-muted-foreground">• {s}</li>
+                  <li key={i} className="text-muted-foreground">&bull; {s}</li>
                 ))}
               </ul>
             </div>
           )}
 
-          {/* Disclaimer — compact, non-intrusive */}
+          {/* Disclaimer */}
           <div className="pt-1 border-t border-border/50">
             <p className="text-[10px] text-muted-foreground/60">Not investment advice.</p>
           </div>

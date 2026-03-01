@@ -1,14 +1,7 @@
 "use client";
 
 import Link from "next/link";
-
-type IndexData = {
-  name: string;
-  ticker: string;
-  value: number;
-  change: number;
-  changePct: number;
-};
+import IndexCardLive from "../../components/market/IndexCardLive";
 
 type SectorData = {
   name: string;
@@ -22,11 +15,11 @@ type EarningsEvent = {
   estimate: string;
 };
 
-const INDICES: IndexData[] = [
-  { name: "S&P 500", ticker: "SPY", value: 5123.41, change: 24.56, changePct: 0.48 },
-  { name: "Nasdaq Composite", ticker: "QQQ", value: 16245.78, change: 112.34, changePct: 0.70 },
-  { name: "Dow Jones", ticker: "DIA", value: 38876.23, change: 145.67, changePct: 0.38 },
-  { name: "Russell 2000", ticker: "IWM", value: 2034.56, change: -8.23, changePct: -0.40 },
+const INDEX_CARDS = [
+  { title: "S&P 500", symbol: "SPY" },
+  { title: "Nasdaq Composite", symbol: "QQQ" },
+  { title: "Dow Jones", symbol: "DIA" },
+  { title: "Russell 2000", symbol: "IWM" },
 ];
 
 const SECTORS: SectorData[] = [
@@ -52,10 +45,6 @@ const EARNINGS: EarningsEvent[] = [
   { ticker: "ADBE", company: "Adobe", date: "2026-03-12", estimate: "$4.75 EPS" },
 ];
 
-function formatCurrency(n: number): string {
-  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 function sectorBarColor(pct: number): string {
   if (pct > 0.5) return "bg-risk-on";
   if (pct > 0) return "bg-risk-on/60";
@@ -71,23 +60,13 @@ export default function MarketDataPage() {
         <div className="text-muted-foreground text-sm">Major indices, sector performance, and upcoming earnings.</div>
       </div>
 
-      {/* Major Indices */}
+      {/* Major Indices — live from Finnhub */}
       <section>
         <div className="bt-panel-title mb-3">MAJOR INDICES</div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {INDICES.map((idx) => {
-            const color = idx.changePct >= 0 ? "text-risk-on" : "text-risk-off";
-            const sign = idx.changePct >= 0 ? "+" : "";
-            return (
-              <Link key={idx.ticker} href={`/stocks/${idx.ticker}`} className="bt-panel p-4 hover:bg-muted/30 transition-colors">
-                <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{idx.name}</div>
-                <div className="mt-1 text-xl font-semibold font-mono">{formatCurrency(idx.value)}</div>
-                <div className={`mt-0.5 text-sm font-mono ${color}`}>
-                  {sign}{formatCurrency(idx.change)} ({sign}{idx.changePct.toFixed(2)}%)
-                </div>
-              </Link>
-            );
-          })}
+          {INDEX_CARDS.map((idx) => (
+            <IndexCardLive key={idx.symbol} title={idx.title} symbol={idx.symbol} />
+          ))}
         </div>
       </section>
 

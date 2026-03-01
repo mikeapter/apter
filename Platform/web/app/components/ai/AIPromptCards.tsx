@@ -10,8 +10,8 @@ type PromptCard = {
 
 const CARDS: PromptCard[] = [
   {
-    label: "Earnings recap",
-    prompt: "Summarize recent earnings results and what the data shows for major tech companies.",
+    label: "Market brief",
+    prompt: "What are the current market conditions and key themes driving price action?",
     icon: <BarChart3 size={14} />,
   },
   {
@@ -25,8 +25,8 @@ const CARDS: PromptCard[] = [
     icon: <GitCompareArrows size={14} />,
   },
   {
-    label: "Risk snapshot",
-    prompt: "What are the current market volatility conditions and key risk factors to be aware of?",
+    label: "Risk assessment",
+    prompt: "Break down the current volatility environment and institutional risk factors.",
     icon: <ShieldAlert size={14} />,
   },
 ];

@@ -1,6 +1,6 @@
 /**
  * Resilient fetch wrapper with auth token refresh.
- * - On 401: refresh via httpOnly cookie (POST /auth/refresh), then retry
+ * - On 401: refresh token once (via HTTP-only cookie), retry original request
  * - On network error/timeout/5xx: DO NOT logout, show transient error
  * - Prevents refresh storms across tabs with in-memory lock
  * - Also sends Bearer header from localStorage for backward compat
@@ -20,11 +20,13 @@ function buildUrl(path: string): string {
 }
 
 async function refreshAccessToken(): Promise<string | null> {
+  // The refresh token is in an HTTP-only cookie — the browser sends it
+  // automatically. We just POST to /auth/refresh with credentials: include.
   try {
-    // Cookie-based refresh: apter_rt cookie is sent automatically via credentials: "include"
     const res = await fetch(buildUrl("/auth/refresh"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
       credentials: "include",
       cache: "no-store",
     });
@@ -60,6 +62,12 @@ async function getRefreshedToken(): Promise<string | null> {
 function forceLogout(): void {
   clearToken();
   clearStoredUser();
+  // Clear the HTTP-only refresh cookie
+  try {
+    fetch(buildUrl("/auth/logout"), { method: "POST", credentials: "include" });
+  } catch {
+    // Fire-and-forget
+  }
   if (typeof window !== "undefined") {
     const next = encodeURIComponent(window.location.pathname);
     window.location.href = `/login?next=${next}`;

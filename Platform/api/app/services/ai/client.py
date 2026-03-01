@@ -85,6 +85,7 @@ def chat_completion(
         return SAFE_FALLBACK
 
     raw_content = data["choices"][0]["message"]["content"]
+    logger.info("AI raw response [%s]: %s", endpoint, raw_content[:300])
     return _validate_and_return(
         raw_content, user_id=user_id, endpoint=endpoint
     )
@@ -186,6 +187,7 @@ def _validate_and_return(
     validation = validate_ai_output(parsed)
 
     if validation.ok:
+        logger.info("AI response passed guardrails [%s]", endpoint)
         # Ensure disclaimer is set
         parsed.setdefault(
             "disclaimer",
@@ -193,9 +195,11 @@ def _validate_and_return(
         )
         try:
             return AIResponseSchema(**parsed)
-        except Exception:
+        except Exception as exc:
+            logger.warning("AIResponseSchema parse failed [%s]: %s. Keys: %s", endpoint, exc, list(parsed.keys()))
             return SAFE_FALLBACK
 
+    logger.warning("AI response failed guardrails [%s]: %s", endpoint, validation.violations[:3])
     return _attempt_rewrite_or_fallback(
         parsed, validation, user_id=user_id, endpoint=endpoint
     )
