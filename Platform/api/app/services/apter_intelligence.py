@@ -102,12 +102,36 @@ def _extract_company_keywords(text: str) -> list[str]:
     return keywords[:5]
 
 
+# Default market context tickers — used when the question is general/market-wide
+# and no specific company or ticker can be identified.
+_MARKET_CONTEXT_TICKERS = ["SPY", "QQQ", "DIA", "IWM"]
+
+# Keywords that signal a general market question (lowercase)
+_MARKET_KEYWORDS = {
+    "market", "markets", "economy", "recession", "crash", "correction",
+    "bull", "bear", "rally", "selloff", "sell-off", "downturn", "upturn",
+    "inflation", "deflation", "interest", "rates", "fed", "federal",
+    "reserve", "treasury", "bond", "bonds", "yield", "yields",
+    "volatility", "vix", "index", "indices", "s&p", "sp500", "nasdaq",
+    "dow", "russell", "sector", "sectors", "overall", "general",
+    "outlook", "forecast", "prediction", "trend", "trends",
+    "gdp", "cpi", "unemployment", "jobs", "earnings", "season",
+}
+
+
+def _is_market_question(text: str) -> bool:
+    """Check if the question is about the general market (not a specific stock)."""
+    words = set(text.lower().split())
+    return bool(words & _MARKET_KEYWORDS)
+
+
 async def _resolve_tickers(question: str, explicit_tickers: list[str]) -> list[str]:
     """
     Resolve tickers from the question using multiple strategies:
     1. Use explicitly provided tickers first
     2. Try to extract uppercase ticker symbols (e.g., AAPL, MSFT)
     3. Search Finnhub for company name keywords (e.g., "apple" -> AAPL)
+    4. For general market questions, use major index ETFs as context
     """
     if explicit_tickers:
         return explicit_tickers
@@ -119,23 +143,29 @@ async def _resolve_tickers(question: str, explicit_tickers: list[str]) -> list[s
 
     # Strategy 2: search Finnhub for company name keywords
     keywords = _extract_company_keywords(question)
-    if not keywords:
-        return []
+    if keywords:
+        # Search concurrently for all keywords
+        search_results = await _asyncio.gather(
+            *(search_symbol(kw) for kw in keywords),
+            return_exceptions=True,
+        )
 
-    # Search concurrently for all keywords
-    search_results = await _asyncio.gather(
-        *(search_symbol(kw) for kw in keywords),
-        return_exceptions=True,
-    )
+        seen: set[str] = set()
+        resolved: list[str] = []
+        for kw, result in zip(keywords, search_results):
+            if isinstance(result, str) and result not in seen:
+                seen.add(result)
+                resolved.append(result)
 
-    seen: set[str] = set()
-    resolved: list[str] = []
-    for kw, result in zip(keywords, search_results):
-        if isinstance(result, str) and result not in seen:
-            seen.add(result)
-            resolved.append(result)
+        if resolved:
+            return resolved[:5]
 
-    return resolved[:5]
+    # Strategy 3: general market question — use major index ETFs
+    if _is_market_question(question):
+        logger.info("[Apter Intelligence] General market question detected, using index ETFs as context")
+        return _MARKET_CONTEXT_TICKERS
+
+    return []
 
 logger = logging.getLogger(__name__)
 
