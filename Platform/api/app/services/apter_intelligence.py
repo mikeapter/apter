@@ -19,15 +19,17 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+import asyncio as _asyncio
 import re as _re
 
 from app.services.apter_intelligence_market_data import (
     build_context as fetch_market_context,
     sanitize_ticker,
+    search_symbol,
 )
 
 # ---------------------------------------------------------------------------
-# Ticker extraction from question text
+# Ticker extraction & company name resolution
 # ---------------------------------------------------------------------------
 
 # Common words that look like tickers but aren't
@@ -44,11 +46,35 @@ _FALSE_TICKERS = {
     "EU", "FED", "GDP", "CPI", "API", "LLM",
 }
 
+# Common stop words for company name extraction (lowercase)
+_STOP_WORDS = {
+    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "could",
+    "should", "may", "might", "shall", "can", "need", "dare", "ought",
+    "used", "to", "of", "in", "for", "on", "with", "at", "by", "from",
+    "as", "into", "through", "during", "before", "after", "above", "below",
+    "between", "out", "off", "over", "under", "again", "further", "then",
+    "once", "here", "there", "when", "where", "why", "how", "all", "each",
+    "every", "both", "few", "more", "most", "other", "some", "such", "no",
+    "nor", "not", "only", "own", "same", "so", "than", "too", "very",
+    "just", "because", "but", "and", "or", "if", "while", "about", "up",
+    "down", "what", "which", "who", "whom", "this", "that", "these",
+    "those", "am", "it", "its", "my", "your", "his", "her", "we", "they",
+    "me", "him", "us", "them", "i", "you", "she", "he",
+    # Finance-related stop words
+    "stock", "stocks", "share", "shares", "price", "market", "trading",
+    "doing", "going", "looking", "think", "tell", "show", "give",
+    "compare", "analysis", "analyze", "performance", "performing",
+    "good", "bad", "well", "better", "best", "worst",
+    "hows", "whats", "how", "what", "today", "now", "current", "currently",
+    "recently", "latest", "last", "next", "much", "many",
+}
+
 _TICKER_PATTERN = _re.compile(r"\b([A-Z]{1,5})\b")
 
 
 def _extract_tickers_from_text(text: str) -> list[str]:
-    """Extract likely stock tickers from user question text."""
+    """Extract likely stock tickers (uppercase symbols) from text."""
     matches = _TICKER_PATTERN.findall(text)
     seen: set[str] = set()
     tickers: list[str] = []
@@ -58,7 +84,58 @@ def _extract_tickers_from_text(text: str) -> list[str]:
             if clean:
                 seen.add(clean)
                 tickers.append(clean)
-    return tickers[:5]  # Limit to 5 auto-extracted
+    return tickers[:5]
+
+
+def _extract_company_keywords(text: str) -> list[str]:
+    """
+    Extract likely company name keywords from question text.
+    E.g., "Hows apple doing?" -> ["apple"]
+    E.g., "Compare Tesla and Microsoft" -> ["Tesla", "Microsoft"]
+    """
+    # Split into words and filter
+    words = _re.findall(r"[A-Za-z]+", text)
+    keywords = []
+    for w in words:
+        if w.lower() not in _STOP_WORDS and len(w) >= 2:
+            keywords.append(w)
+    return keywords[:5]
+
+
+async def _resolve_tickers(question: str, explicit_tickers: list[str]) -> list[str]:
+    """
+    Resolve tickers from the question using multiple strategies:
+    1. Use explicitly provided tickers first
+    2. Try to extract uppercase ticker symbols (e.g., AAPL, MSFT)
+    3. Search Finnhub for company name keywords (e.g., "apple" -> AAPL)
+    """
+    if explicit_tickers:
+        return explicit_tickers
+
+    # Strategy 1: uppercase ticker symbols in text
+    auto_tickers = _extract_tickers_from_text(question)
+    if auto_tickers:
+        return auto_tickers
+
+    # Strategy 2: search Finnhub for company name keywords
+    keywords = _extract_company_keywords(question)
+    if not keywords:
+        return []
+
+    # Search concurrently for all keywords
+    search_results = await _asyncio.gather(
+        *(search_symbol(kw) for kw in keywords),
+        return_exceptions=True,
+    )
+
+    seen: set[str] = set()
+    resolved: list[str] = []
+    for kw, result in zip(keywords, search_results):
+        if isinstance(result, str) and result not in seen:
+            seen.add(result)
+            resolved.append(result)
+
+    return resolved[:5]
 
 logger = logging.getLogger(__name__)
 
@@ -280,12 +357,9 @@ async def answer_question(
         if clean:
             clean_tickers.append(clean)
 
-    # Auto-extract tickers from question text if none were provided
-    if not clean_tickers:
-        auto_tickers = _extract_tickers_from_text(question)
-        if auto_tickers:
-            logger.info("[Apter Intelligence] Auto-extracted tickers from question: %s", auto_tickers)
-            clean_tickers = auto_tickers
+    # Auto-resolve tickers from question text (explicit symbols + company name search)
+    clean_tickers = await _resolve_tickers(question, clean_tickers)
+    logger.info("[Apter Intelligence] Resolved tickers: %s (from question='%s', explicit=%s)", clean_tickers, question[:80], tickers)
 
     # Fetch live market data
     logger.info("[Apter Intelligence] Fetching data for tickers=%s", clean_tickers)

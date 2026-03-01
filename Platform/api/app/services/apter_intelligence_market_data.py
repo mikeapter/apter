@@ -435,6 +435,54 @@ async def _fmp_earnings(client: httpx.AsyncClient, ticker: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Finnhub symbol search (company name → ticker resolution)
+# ---------------------------------------------------------------------------
+
+
+async def search_symbol(query: str) -> Optional[str]:
+    """
+    Use Finnhub /search to resolve a company name or keyword to a ticker symbol.
+    Returns the best-matching US stock ticker, or None.
+    """
+    _load_keys()
+    if not _FINNHUB_KEY:
+        logger.warning("[Apter Intelligence] Cannot search symbols — no FINNHUB_API_KEY")
+        return None
+
+    try:
+        async with httpx.AsyncClient() as client:
+            data = await _request(
+                client,
+                "https://finnhub.io/api/v1/search",
+                params={"q": query, "token": _FINNHUB_KEY},
+            )
+        if not data or not data.get("result"):
+            logger.info("[Apter Intelligence] Symbol search for '%s' returned no results", query)
+            return None
+
+        # Prefer "Common Stock" types on major US exchanges
+        for r in data["result"]:
+            symbol = r.get("symbol", "")
+            rtype = r.get("type", "")
+            # Skip non-stock results, ADRs with suffixes, crypto, etc.
+            if rtype in ("Common Stock", "EQS") and "." not in symbol:
+                logger.info("[Apter Intelligence] Symbol search '%s' → %s (%s)", query, symbol, r.get("description", ""))
+                return symbol
+
+        # Fallback: return first result regardless of type
+        first = data["result"][0]
+        symbol = first.get("symbol", "")
+        if symbol and "." not in symbol:
+            logger.info("[Apter Intelligence] Symbol search '%s' → %s (fallback)", query, symbol)
+            return symbol
+
+        return None
+    except Exception as exc:
+        logger.error("[Apter Intelligence] Symbol search error for '%s': %s", query, exc)
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Unavailable stubs
 # ---------------------------------------------------------------------------
 
