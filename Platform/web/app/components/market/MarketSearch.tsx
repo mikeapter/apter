@@ -21,7 +21,12 @@ function useDebounce<T>(value: T, delayMs: number): T {
   return debounced;
 }
 
-export default function MarketSearch() {
+export default function MarketSearch({
+  onSelect,
+}: {
+  /** If provided, calls onSelect(symbol) instead of navigating to /stocks/:symbol */
+  onSelect?: (symbol: string) => void;
+} = {}) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [q, setQ] = React.useState("");
@@ -72,7 +77,11 @@ export default function MarketSearch() {
     setOpen(false);
     setQ("");
     setItems([]);
-    router.push(`/stocks/${item.symbol}`);
+    if (onSelect) {
+      onSelect(item.symbol);
+    } else {
+      router.push(`/stocks/${item.symbol}`);
+    }
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
