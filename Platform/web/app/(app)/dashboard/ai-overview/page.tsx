@@ -27,15 +27,15 @@ export default function AIOverviewPage() {
     <div className="space-y-4 max-w-3xl">
       {/* Page header */}
       <div>
-        <h1 className="text-lg font-semibold">AI Market Overview</h1>
+        <h1 className="text-lg font-semibold">Daily Brief</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          AI-generated market briefing with educational context and risk observations.
+          Structured market briefing: regime, breadth, sector rotation, drivers, and risk flags.
         </p>
       </div>
 
       {/* Disclaimer banner */}
-      <div className="rounded-md border border-blue-500/20 bg-blue-500/5 px-3 py-2">
-        <p className="text-xs text-blue-400">{COMPLIANCE.DISCLOSURE_BANNER}</p>
+      <div className="rounded-md border border-border bg-panel-2 px-3 py-2">
+        <p className="text-[11px] text-muted-foreground">{COMPLIANCE.DISCLOSURE_BANNER}</p>
       </div>
 
       {/* Controls */}
