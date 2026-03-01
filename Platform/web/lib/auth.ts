@@ -1,7 +1,10 @@
 /**
  * Client-side auth token helpers.
- * Token is stored in localStorage under a well-known key.
- * A session cookie is set for middleware/SSR awareness.
+ *
+ * Token is stored in localStorage for backward compat (AuthGuard, etc.).
+ * The *primary* auth mechanism is now httpOnly cookies (apter_at / apter_rt)
+ * set by the backend. This module also sets a non-httpOnly apter_session=1
+ * cookie so the Next.js middleware can detect an active session.
  */
 
 const LS_TOKEN = "apter_token";
@@ -25,29 +28,23 @@ export function getToken(): string | null {
 }
 
 /**
- * Store auth token. When `remember` is true (user checked "Remember this device"),
- * the session cookie lasts 30 days so the middleware won't redirect to /login.
- * When false, the cookie is session-only (cleared when the browser closes).
+ * Store auth token in localStorage for backward compat.
+ *
+ * The server owns all cookie management (apter_at, apter_rt, apter_session)
+ * via Set-Cookie headers. We do NOT set apter_session here to avoid
+ * overwriting the server's persistent cookie with a session cookie.
  */
 export function setToken(token: string, remember = false): void {
   try {
     localStorage.setItem(LS_TOKEN, token);
-    // Persist the remember preference so we can re-check on reload
     localStorage.setItem("apter_remember", remember ? "1" : "0");
   } catch {}
-  const secure =
-    typeof window !== "undefined" && window.location.protocol === "https:"
-      ? "; Secure"
-      : "";
-  const maxAge = remember
-    ? `; max-age=${60 * 60 * 24 * 30}` // 30 days
-    : `; max-age=${60 * 60 * 24 * 30}`; // Also persist cookie for 30 days — middleware needs it
-  document.cookie = `${COOKIE_NAME}=1; path=/${maxAge}; SameSite=Lax${secure}`;
 }
 
 export function clearToken(): void {
   try {
     localStorage.removeItem(LS_TOKEN);
+    localStorage.removeItem("apter_remember");
   } catch {}
   document.cookie = `${COOKIE_NAME}=; path=/; max-age=0`;
 }

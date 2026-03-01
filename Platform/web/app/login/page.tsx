@@ -28,7 +28,7 @@ export default function LoginPage() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
-  const [rememberDevice, setRememberDevice] = React.useState(false);
+  const [keepSignedIn, setKeepSignedIn] = React.useState(false);
 
   const [emailTouched, setEmailTouched] = React.useState(false);
   const [serverError, setServerError] = React.useState("");
@@ -52,7 +52,7 @@ export default function LoginPage() {
     const result = await apiPost<LoginResponse>("/auth/login", {
       email: email.trim().toLowerCase(),
       password,
-      remember_device: rememberDevice,
+      keep_signed_in: keepSignedIn,
     });
 
     setSubmitting(false);
@@ -76,7 +76,7 @@ export default function LoginPage() {
     }
 
     const loginData = result.data as { access_token: string; token_type: string };
-    setToken(loginData.access_token, rememberDevice);
+    setToken(loginData.access_token, keepSignedIn);
 
     // Fetch user profile to store name for greeting
     try {
@@ -210,20 +210,20 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Remember device */}
+          {/* Keep me signed in */}
           <div className="flex items-center gap-2">
             <input
-              id="rememberDevice"
+              id="keepSignedIn"
               type="checkbox"
-              checked={rememberDevice}
-              onChange={(e) => setRememberDevice(e.target.checked)}
+              checked={keepSignedIn}
+              onChange={(e) => setKeepSignedIn(e.target.checked)}
               className="h-4 w-4 rounded border-border bg-background text-foreground accent-foreground"
             />
             <label
-              htmlFor="rememberDevice"
+              htmlFor="keepSignedIn"
               className="text-sm text-muted-foreground select-none"
             >
-              Remember this device
+              Keep me signed in
             </label>
           </div>
 

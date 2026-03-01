@@ -101,8 +101,17 @@ export default function AppShell({ children, className }: AppShellProps) {
   }, [isMobile]);
 
   function handleLogout() {
-    clearAuth();
-    window.location.href = "/";
+    // Clear server-side httpOnly cookies, then clear client state
+    fetch("/auth/logout", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+    })
+      .catch(() => {})
+      .finally(() => {
+        clearAuth();
+        window.location.href = "/";
+      });
   }
 
   // Derive display name: prefer first_name, then full_name, then email prefix

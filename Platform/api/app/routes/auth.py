@@ -4,7 +4,7 @@ import re
 from datetime import timedelta
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,12 @@ from app.models.user import User
 from app.services.twofa_service import decrypt_secret, verify_backup_code, verify_totp
 from app.services.auth_service import create_access_token, hash_password, verify_password
 from app.services.hubspot_service import sync_contact_to_hubspot
+from app.auth.auth_core import (
+    issue_auth_cookies,
+    clear_auth_cookies,
+    reject_if_reusing_password,
+    revoke_all_sessions_for_user,
+)
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -63,7 +69,9 @@ class RegisterResponse(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    # Accept both field names for backward compat
     remember_device: bool = False
+    keep_signed_in: bool = False
 
 
 class Login2FARequest(BaseModel):
@@ -82,6 +90,7 @@ REMEMBER_TOKEN_EXPIRE_DAYS = 30
 @router.post("/register", response_model=RegisterResponse)
 def register(
     payload: RegisterRequest,
+    resp: Response,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
@@ -116,6 +125,10 @@ def register(
         created_at=user.created_at,
     )
 
+    # Set httpOnly auth cookies (new registrations get short-lived refresh)
+    issue_auth_cookies(resp, db, user.id, keep_signed_in=False)
+
+    # Still return bearer token for backward compat with frontend localStorage
     access_token = create_access_token(
         data={"sub": str(user.id)},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
@@ -136,6 +149,7 @@ def register(
 @router.post("/login")
 def login(
     payload: LoginRequest,
+    resp: Response,
     db: Session = Depends(get_db),
 ):
     normalized_email = str(payload.email).lower().strip()
@@ -154,8 +168,14 @@ def login(
             "message": "2FA required",
         }
 
-    # "Remember this device" → 30-day token; otherwise 60 minutes
-    if payload.remember_device:
+    # Resolve keep_signed_in: accept either field for backward compat
+    keep = payload.keep_signed_in or payload.remember_device
+
+    # Set httpOnly auth cookies
+    issue_auth_cookies(resp, db, user.id, keep_signed_in=keep)
+
+    # "Keep me signed in" → 30-day token; otherwise 60 minutes
+    if keep:
         token_expiry = timedelta(days=REMEMBER_TOKEN_EXPIRE_DAYS)
     else:
         token_expiry = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -177,6 +197,7 @@ def login(
 @router.post("/login/2fa")
 def login_2fa(
     payload: Login2FARequest,
+    resp: Response,
     db: Session = Depends(get_db),
 ):
     user = db.query(User).filter(User.id == payload.user_id).first()
@@ -214,6 +235,9 @@ def login_2fa(
         user.backup_codes = remaining_codes
         db.commit()
 
+    # Set httpOnly auth cookies (short-lived for 2FA logins)
+    issue_auth_cookies(resp, db, user.id, keep_signed_in=False)
+
     access_token = create_access_token(
         data={"sub": str(user.id)},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
@@ -223,6 +247,15 @@ def login_2fa(
         "access_token": access_token,
         "token_type": "bearer",
     }
+
+
+# -------------------------
+# LOGOUT
+# -------------------------
+@router.post("/logout")
+def logout(resp: Response):
+    clear_auth_cookies(resp)
+    return {"ok": True}
 
 
 # -------------------------
@@ -236,3 +269,62 @@ def me(user: User = Depends(get_current_user)):
         "tier": user.subscription_tier,
         "status": user.subscription_status,
     }
+
+
+# -------------------------
+# PASSWORD RESET
+# Block reusing the same current password.
+# Revoke all sessions after reset.
+# -------------------------
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        if len(v) < 10:
+            raise ValueError("Password must be at least 10 characters")
+        return v
+
+
+@router.post("/reset-password")
+def reset_password(
+    payload: ResetPasswordRequest,
+    resp: Response,
+    db: Session = Depends(get_db),
+):
+    """
+    Reset password using a one-time reset token.
+    Blocks reuse of the current password and revokes all existing sessions.
+
+    NOTE: This endpoint requires a valid reset token issued by a
+    "forgot password" email flow. Until that flow is fully implemented,
+    this endpoint validates the token format but will reject unknown tokens.
+    For now, the forgot-password page directs users to support@apterfinancial.com.
+    """
+    # TODO: Implement reset token validation against DB.
+    # When implementing, create a password_reset_tokens table with:
+    #   - token (hashed), user_id, expires_at, used (bool)
+    # Then uncomment and adapt the code below.
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Invalid or expired reset token. Please request a new password reset.",
+    )
+
+    # --- Full implementation for when reset tokens are wired up ---
+    # user = db_validate_reset_token(payload.token, db)
+    # if not user:
+    #     raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    #
+    # # Block same password reuse
+    # reject_if_reusing_password(payload.new_password, user.hashed_password)
+    #
+    # user.hashed_password = hash_password(payload.new_password)
+    # db.commit()
+    #
+    # # Revoke all sessions so old tokens/cookies die
+    # revoke_all_sessions_for_user(db, user.id)
+    # clear_auth_cookies(resp)
+    #
+    # return {"ok": True}

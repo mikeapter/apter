@@ -54,6 +54,7 @@ export async function apiGet<T>(
       ...init,
       method: "GET",
       headers: mergedHeaders(init?.headers, token),
+      credentials: "include",
       cache: "no-store",
     });
 
@@ -86,6 +87,7 @@ export async function apiPost<T>(
       ...init,
       method: "POST",
       headers: mergedHeaders(init?.headers, token),
+      credentials: "include",
       body: JSON.stringify(body ?? {}),
       cache: "no-store",
     });

@@ -1,8 +1,9 @@
 /**
  * Resilient fetch wrapper with auth token refresh.
- * - On 401: refresh token once, retry original request
+ * - On 401: refresh via httpOnly cookie (POST /auth/refresh), then retry
  * - On network error/timeout/5xx: DO NOT logout, show transient error
  * - Prevents refresh storms across tabs with in-memory lock
+ * - Also sends Bearer header from localStorage for backward compat
  */
 
 import { getToken, setToken, clearToken, clearStoredUser } from "./auth";
@@ -19,16 +20,12 @@ function buildUrl(path: string): string {
 }
 
 async function refreshAccessToken(): Promise<string | null> {
-  const token = getToken();
-  if (!token) return null;
-
   try {
+    // Cookie-based refresh: apter_rt cookie is sent automatically via credentials: "include"
     const res = await fetch(buildUrl("/auth/refresh"), {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
       cache: "no-store",
     });
 
@@ -36,6 +33,7 @@ async function refreshAccessToken(): Promise<string | null> {
 
     const data = await res.json();
     if (data.access_token) {
+      // Store the new bearer token in localStorage for backward compat
       const remember = typeof window !== "undefined"
         ? localStorage.getItem("apter_remember") === "1"
         : false;
@@ -95,6 +93,7 @@ export async function fetchWithAuth<T>(
     const res = await fetch(url, {
       ...options,
       headers,
+      credentials: "include",
       signal: controller.signal,
       cache: "no-store",
     });
@@ -107,15 +106,16 @@ export async function fetchWithAuth<T>(
       return { ok: true, data, status: res.status };
     }
 
-    // 401: Try refresh once
+    // 401: Try refresh once (cookie-based)
     if (res.status === 401) {
       const newToken = await getRefreshedToken();
       if (newToken) {
-        // Retry with new token
+        // Retry with new token + cookies
         headers.set("Authorization", `Bearer ${newToken}`);
         const retryRes = await fetch(url, {
           ...options,
           headers,
+          credentials: "include",
           cache: "no-store",
         });
 
