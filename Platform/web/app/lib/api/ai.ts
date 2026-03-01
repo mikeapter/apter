@@ -6,6 +6,26 @@
 // Types
 // ---------------------------------------------------------------------------
 
+export type SectorNote = {
+  sector: string;
+  note: string;
+};
+
+export type WatchlistFocusItem = {
+  ticker: string;
+  note: string;
+};
+
+export type MarketRegime = {
+  label: "RISK-ON" | "NEUTRAL" | "RISK-OFF";
+  rationale: string[];
+};
+
+export type SectorRotation = {
+  strong: SectorNote[];
+  weak: SectorNote[];
+};
+
 export type AIResponse = {
   message_id?: string;
   summary: string;
@@ -19,6 +39,13 @@ export type AIResponse = {
   scenarios?: string[] | null;
   comparisons?: string[] | null;
   cached?: boolean;
+
+  // Daily Brief structured sections
+  market_regime?: MarketRegime | null;
+  breadth_internals?: string[] | null;
+  sector_rotation?: SectorRotation | null;
+  key_drivers?: string[] | null;
+  watchlist_focus?: WatchlistFocusItem[] | null;
 };
 
 export type ChatRequest = {
