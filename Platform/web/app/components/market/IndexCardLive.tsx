@@ -32,12 +32,12 @@ function formatPct(v: number | null | undefined) {
 export default function IndexCardLive({ title, symbol }: Props) {
   const { quote, isLoading } = useLiveQuote(symbol, { refreshMs: 20000 });
 
-  const changePct = quote?.changePct;
+  const changePercent = quote?.changePercent;
   const isPositive =
     !isLoading &&
-    changePct !== null &&
-    changePct !== undefined &&
-    changePct >= 0;
+    changePercent !== null &&
+    changePercent !== undefined &&
+    changePercent >= 0;
   const color = isLoading
     ? ""
     : isPositive
@@ -59,7 +59,7 @@ export default function IndexCardLive({ title, symbol }: Props) {
       <div className={`mt-0.5 text-sm font-mono tabular-nums ${color}`}>
         {isLoading
           ? "—"
-          : `${formatChange(quote?.change)} (${formatPct(quote?.changePct)})`}
+          : `${formatChange(quote?.change)} (${formatPct(quote?.changePercent)})`}
       </div>
     </Link>
   );

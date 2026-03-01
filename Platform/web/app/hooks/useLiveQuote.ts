@@ -2,13 +2,19 @@
 
 import useSWR from "swr";
 
+/** Matches NormalizedQuote from @/lib/market/types */
 type Quote = {
   symbol: string;
-  price: number | null;
-  change: number | null;
-  changePct: number | null;
-  prevClose: number | null;
-  ts: number | null;
+  price: number;
+  change: number;
+  changePercent: number;
+  open?: number;
+  high?: number;
+  low?: number;
+  prevClose?: number;
+  asOf: string;
+  source: string;
+  isDelayed: boolean;
 };
 
 const fetcher = async (url: string): Promise<Quote> => {

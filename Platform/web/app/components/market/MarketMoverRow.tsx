@@ -15,9 +15,8 @@ export default function MarketMoverRow({ symbol, name, grade }: Props) {
   const { quote, isLoading } = useLiveQuote(symbol, { refreshMs: 15000 });
 
   const priceText = isLoading ? "—" : formatUsd(quote?.price);
-  const changePct = quote?.changePct;
-  const isPositive =
-    changePct !== null && changePct !== undefined && changePct >= 0;
+  const pct = quote?.changePercent;
+  const isPositive = pct !== null && pct !== undefined && pct >= 0;
   const color = isLoading
     ? "text-muted-foreground"
     : isPositive
@@ -25,9 +24,9 @@ export default function MarketMoverRow({ symbol, name, grade }: Props) {
       : "text-risk-off";
   const sign = isPositive ? "+" : "";
   const changePctText =
-    isLoading || changePct === null || changePct === undefined
+    isLoading || pct === null || pct === undefined
       ? "—"
-      : `${sign}${changePct.toFixed(2)}%`;
+      : `${sign}${pct.toFixed(2)}%`;
 
   return (
     <Link
