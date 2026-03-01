@@ -19,10 +19,46 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+import re as _re
+
 from app.services.apter_intelligence_market_data import (
     build_context as fetch_market_context,
     sanitize_ticker,
 )
+
+# ---------------------------------------------------------------------------
+# Ticker extraction from question text
+# ---------------------------------------------------------------------------
+
+# Common words that look like tickers but aren't
+_FALSE_TICKERS = {
+    "I", "A", "AI", "ALL", "AM", "AN", "AND", "ANY", "ARE", "AS", "AT",
+    "BE", "BIG", "BUT", "BY", "CAN", "CEO", "CFO", "CTO", "DD", "DID",
+    "DO", "EPS", "ETF", "FOR", "GDP", "GET", "GO", "GOT", "HAS", "HAD",
+    "HE", "HER", "HIM", "HIS", "HOW", "IF", "IN", "IS", "IT", "ITS",
+    "LET", "LOW", "MAY", "ME", "MY", "NEW", "NO", "NOT", "NOW", "OF",
+    "OFF", "OLD", "ON", "ONE", "OR", "OUR", "OUT", "OWN", "PE", "PB",
+    "PS", "PUT", "ROE", "ROA", "RUN", "SAY", "SHE", "SO", "TEN", "THE",
+    "TO", "TOP", "TTM", "TWO", "UP", "US", "USE", "VS", "WAS", "WAY",
+    "WE", "WHO", "WHY", "WIN", "YOU", "YOY", "IPO", "SEC", "USA", "UK",
+    "EU", "FED", "GDP", "CPI", "API", "LLM",
+}
+
+_TICKER_PATTERN = _re.compile(r"\b([A-Z]{1,5})\b")
+
+
+def _extract_tickers_from_text(text: str) -> list[str]:
+    """Extract likely stock tickers from user question text."""
+    matches = _TICKER_PATTERN.findall(text)
+    seen: set[str] = set()
+    tickers: list[str] = []
+    for m in matches:
+        if m not in _FALSE_TICKERS and m not in seen:
+            clean = sanitize_ticker(m)
+            if clean:
+                seen.add(clean)
+                tickers.append(clean)
+    return tickers[:5]  # Limit to 5 auto-extracted
 
 logger = logging.getLogger(__name__)
 
@@ -237,14 +273,22 @@ async def answer_question(
     """
     request_id = str(uuid.uuid4())
 
-    # Sanitize tickers
+    # Sanitize explicitly-provided tickers
     clean_tickers = []
     for t in tickers:
         clean = sanitize_ticker(t)
         if clean:
             clean_tickers.append(clean)
 
+    # Auto-extract tickers from question text if none were provided
+    if not clean_tickers:
+        auto_tickers = _extract_tickers_from_text(question)
+        if auto_tickers:
+            logger.info("[Apter Intelligence] Auto-extracted tickers from question: %s", auto_tickers)
+            clean_tickers = auto_tickers
+
     # Fetch live market data
+    logger.info("[Apter Intelligence] Fetching data for tickers=%s", clean_tickers)
     context = await fetch_market_context(clean_tickers) if clean_tickers else {
         "tickers": {},
         "meta": {"provider": "none", "data_quality": "unavailable", "fetched_at": ""},
