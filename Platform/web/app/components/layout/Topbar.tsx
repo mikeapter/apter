@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { Search, User, Settings, CreditCard, LogOut, ChevronDown } from "lucide-react";
+import { User, Settings, CreditCard, LogOut, ChevronDown } from "lucide-react";
 import { COMPLIANCE } from "../../lib/compliance";
 import { useAuth } from "../../hooks/useAuth";
+import MarketSearch from "../market/MarketSearch";
 
 function DisclosureBanner() {
   return (
@@ -16,32 +16,6 @@ function DisclosureBanner() {
   );
 }
 
-function StockSearch() {
-  const router = useRouter();
-  const [query, setQuery] = useState("");
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const ticker = query.trim().toUpperCase();
-    if (ticker) {
-      router.push(`/stocks/${ticker}`);
-      setQuery("");
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="relative w-full max-w-md">
-      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search ticker or company..."
-        className="w-full h-9 rounded-md border border-border bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring/40 placeholder:text-muted-foreground"
-      />
-    </form>
-  );
-}
 
 function UserMenu() {
   const { user } = useAuth();
@@ -156,7 +130,7 @@ export function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
 
         {/* Center: stock search */}
         <div className="hidden sm:flex flex-1 justify-center max-w-lg">
-          <StockSearch />
+          <MarketSearch />
         </div>
 
         {/* Right: user menu */}

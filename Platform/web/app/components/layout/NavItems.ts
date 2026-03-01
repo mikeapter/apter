@@ -17,7 +17,7 @@ export type NavItem = {
   priority: "HIGH" | "MED" | "LOW";
 };
 
-// Settings removed from sidebar — accessible only via user avatar dropdown
+// Settings removed from sidebar -- accessible only via user avatar dropdown
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, priority: "HIGH" },
   { label: "Daily Brief", href: "/dashboard/ai-overview", icon: Sparkles, priority: "HIGH" },

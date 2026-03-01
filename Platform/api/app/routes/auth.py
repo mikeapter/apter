@@ -1,10 +1,12 @@
+# Platform/api/app/routes/auth.py
+
 from __future__ import annotations
 
 import re
 from datetime import timedelta
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session
 
@@ -12,14 +14,33 @@ from app.db.session import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
 from app.services.twofa_service import decrypt_secret, verify_backup_code, verify_totp
-from app.services.auth_service import create_access_token, hash_password, verify_password
+from app.services.auth_service import (
+    create_access_token,
+    create_refresh_token,
+    hash_password,
+    verify_password,
+)
 from app.services.hubspot_service import sync_contact_to_hubspot
+
+from app.security.config import (
+    ACCESS_TOKEN_MINUTES,
+    IS_PRODUCTION,
+    REFRESH_COOKIE_NAME,
+    REFRESH_COOKIE_PATH,
+    REFRESH_TOKEN_DAYS,
+)
+from app.security.rate_limit import get_login_limiter, get_register_limiter
+from app.security.lockout import login_lockout
+from app.security.tokens import refresh_token_store
+from app.security.audit import audit_log
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 # Name pattern: 2-50 chars, letters, spaces, hyphens, apostrophes
 _NAME_PATTERN = re.compile(r"^[a-zA-Z\s'\-]{2,50}$")
+
+REMEMBER_TOKEN_EXPIRE_DAYS = 30
 
 
 class RegisterRequest(BaseModel):
@@ -72,19 +93,93 @@ class Login2FARequest(BaseModel):
     trust_device: bool = False
 
 
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
-REMEMBER_TOKEN_EXPIRE_DAYS = 30
+# ── Cookie helpers ───────────────────────────────────────────────────────────
+
+def _set_refresh_cookie(
+    response: Response,
+    refresh_token: str,
+    remember_device: bool = False,
+) -> None:
+    """Set the refresh token as an HTTP-only secure cookie."""
+    max_age = (
+        REMEMBER_TOKEN_EXPIRE_DAYS * 86400
+        if remember_device
+        else REFRESH_TOKEN_DAYS * 86400
+    )
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        httponly=True,
+        secure=IS_PRODUCTION,
+        samesite="lax",
+        path=REFRESH_COOKIE_PATH,
+        max_age=max_age,
+    )
 
 
-# -------------------------
+def _clear_refresh_cookie(response: Response) -> None:
+    """Delete the refresh token cookie."""
+    response.delete_cookie(
+        key=REFRESH_COOKIE_NAME,
+        httponly=True,
+        secure=IS_PRODUCTION,
+        samesite="lax",
+        path=REFRESH_COOKIE_PATH,
+    )
+
+
+# ── Helper: issue token pair ─────────────────────────────────────────────────
+
+def _issue_token_pair(user_id: int, remember_device: bool = False) -> dict:
+    """
+    Issue an access token + a one-time-use refresh token.
+    Stores the refresh token hash server-side for rotation.
+    """
+    access_token = create_access_token(
+        data={"sub": str(user_id)},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_MINUTES),
+    )
+
+    if remember_device:
+        refresh_delta = timedelta(days=REMEMBER_TOKEN_EXPIRE_DAYS)
+    else:
+        refresh_delta = timedelta(days=REFRESH_TOKEN_DAYS)
+
+    raw_refresh, jti, expires_at = create_refresh_token(
+        user_id=user_id,
+        expires_delta=refresh_delta,
+    )
+
+    # Store hashed refresh token server-side
+    refresh_token_store.store(
+        raw_token=raw_refresh,
+        user_id=user_id,
+        jti=jti,
+        expires_at=expires_at,
+    )
+
+    return {
+        "access_token": access_token,
+        "refresh_token": raw_refresh,
+        "token_type": "bearer",
+        "remember_device": remember_device,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # REGISTER (Observer by default)
-# -------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 @router.post("/register", response_model=RegisterResponse)
 def register(
     payload: RegisterRequest,
+    request: Request,
+    response: Response,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
+    # Rate limit registration by IP
+    get_register_limiter().check(request)
+
     normalized_email = str(payload.email).lower().strip()
     existing = db.query(User).filter(User.email == normalized_email).first()
     if existing:
@@ -116,9 +211,17 @@ def register(
         created_at=user.created_at,
     )
 
-    access_token = create_access_token(
-        data={"sub": str(user.id)},
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    tokens = _issue_token_pair(user.id)
+
+    # Set refresh token as HTTP-only cookie
+    _set_refresh_cookie(response, tokens["refresh_token"])
+
+    audit_log(
+        "register",
+        request=request,
+        user_id=user.id,
+        email=normalized_email,
+        success=True,
     )
 
     return RegisterResponse(
@@ -126,65 +229,121 @@ def register(
         email=user.email,
         first_name=user.first_name or "",
         last_name=user.last_name or "",
-        access_token=access_token,
+        access_token=tokens["access_token"],
     )
 
 
-# -------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # LOGIN — STEP 1 (PASSWORD)
-# -------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 @router.post("/login")
 def login(
     payload: LoginRequest,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db),
 ):
     normalized_email = str(payload.email).lower().strip()
+
+    # Rate limit + lockout check
+    get_login_limiter().check(request, normalized_email)
+    login_lockout.check(request, normalized_email)
+
     user = db.query(User).filter(User.email == normalized_email).first()
 
     if not user or not verify_password(payload.password, user.hashed_password):
+        # Record failure for lockout tracking
+        login_lockout.record_failure(request, normalized_email)
+        audit_log(
+            "auth_failure",
+            request=request,
+            email=normalized_email,
+            success=False,
+            details={"reason": "invalid_credentials"},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
         )
 
+    # Check account suspension
+    if not user.is_active:
+        audit_log(
+            "auth_failure",
+            request=request,
+            user_id=user.id,
+            email=normalized_email,
+            success=False,
+            details={"reason": "account_suspended"},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account suspended",
+        )
+
     if user.is_2fa_enabled:
+        # Don't clear lockout yet — 2FA still needed
+        audit_log(
+            "auth_2fa_required",
+            request=request,
+            user_id=user.id,
+            email=normalized_email,
+            success=True,
+        )
         return {
             "requires_2fa": True,
             "user_id": user.id,
             "message": "2FA required",
         }
 
-    # "Remember this device" → 30-day token; otherwise 60 minutes
-    if payload.remember_device:
-        token_expiry = timedelta(days=REMEMBER_TOKEN_EXPIRE_DAYS)
-    else:
-        token_expiry = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    # Successful login — clear lockout counter
+    login_lockout.record_success(request, normalized_email)
 
-    access_token = create_access_token(
-        data={"sub": str(user.id)},
-        expires_delta=token_expiry,
+    tokens = _issue_token_pair(user.id, remember_device=payload.remember_device)
+
+    # Set refresh token as HTTP-only cookie
+    _set_refresh_cookie(response, tokens["refresh_token"], remember_device=payload.remember_device)
+
+    audit_log(
+        "auth_success",
+        request=request,
+        user_id=user.id,
+        email=normalized_email,
+        success=True,
     )
 
     return {
-        "access_token": access_token,
+        "access_token": tokens["access_token"],
         "token_type": "bearer",
     }
 
 
-# -------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # LOGIN — STEP 2 (2FA)
-# -------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 @router.post("/login/2fa")
 def login_2fa(
     payload: Login2FARequest,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db),
 ):
+    # Rate limit 2FA attempts with the login limiter
+    get_login_limiter().check(request)
+
     user = db.query(User).filter(User.id == payload.user_id).first()
 
     if not user or not user.is_2fa_enabled:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid 2FA session",
+        )
+
+    # Check account suspension
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account suspended",
         )
 
     # --- Try TOTP first ---
@@ -194,6 +353,15 @@ def login_2fa(
     # --- If not TOTP, try backup code ---
     if not valid_totp:
         if not user.backup_codes:
+            login_lockout.record_failure(request, user.email)
+            audit_log(
+                "auth_failure",
+                request=request,
+                user_id=user.id,
+                email=user.email,
+                success=False,
+                details={"reason": "invalid_2fa_code"},
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid 2FA code",
@@ -205,6 +373,15 @@ def login_2fa(
         )
 
         if not valid_backup:
+            login_lockout.record_failure(request, user.email)
+            audit_log(
+                "auth_failure",
+                request=request,
+                user_id=user.id,
+                email=user.email,
+                success=False,
+                details={"reason": "invalid_2fa_code"},
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid 2FA code",
@@ -214,20 +391,41 @@ def login_2fa(
         user.backup_codes = remaining_codes
         db.commit()
 
-    access_token = create_access_token(
-        data={"sub": str(user.id)},
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    # Successful 2FA — clear lockout
+    login_lockout.record_success(request, user.email)
+
+    tokens = _issue_token_pair(user.id, remember_device=payload.trust_device)
+
+    # Set refresh token as HTTP-only cookie
+    _set_refresh_cookie(response, tokens["refresh_token"], remember_device=payload.trust_device)
+
+    audit_log(
+        "auth_success",
+        request=request,
+        user_id=user.id,
+        email=user.email,
+        success=True,
+        details={"method": "2fa"},
     )
 
     return {
-        "access_token": access_token,
+        "access_token": tokens["access_token"],
         "token_type": "bearer",
     }
 
 
-# -------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# LOGOUT — clear refresh token cookie + revoke server-side
+# ─────────────────────────────────────────────────────────────────────────────
+@router.post("/logout")
+def logout(request: Request, response: Response):
+    _clear_refresh_cookie(response)
+    return {"detail": "Logged out"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # WHO AM I (token validation)
-# -------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 @router.get("/me")
 def me(user: User = Depends(get_current_user)):
     return {

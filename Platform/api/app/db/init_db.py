@@ -47,6 +47,7 @@ def _migrate_add_columns() -> None:
             "full_name": "VARCHAR",
             "first_name": "VARCHAR DEFAULT ''",
             "last_name": "VARCHAR DEFAULT ''",
+            "is_active": "BOOLEAN DEFAULT true NOT NULL",
         }
 
         with engine.begin() as conn:

@@ -4,21 +4,127 @@ Market data tool endpoints.
 These are called server-side by the AI service to gather context before
 generating a response. They also serve as public-facing data endpoints.
 
-Currently returns mock data (matching the frontend stockData.ts patterns).
-Swap implementations to real providers (Polygon, Alpha Vantage, yfinance, etc.)
-by updating the adapter functions.
+Uses Finnhub as the primary live data source when FINNHUB_API_KEY is set.
+Falls back to static mock data when the key is missing or the API call fails.
 """
 
 from __future__ import annotations
 
+import logging
+import os
+import time
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+import httpx
 from fastapi import APIRouter, Query
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/data", tags=["Market Data"])
 
 # ---------------------------------------------------------------------------
-# Mock data store (mirrors Platform/web/app/lib/stockData.ts)
+# Finnhub config
+# ---------------------------------------------------------------------------
+
+_FINNHUB_BASE = "https://finnhub.io/api/v1"
+
+
+def _fh_key() -> str | None:
+    """Return the Finnhub API key (read at call time so hot-reload works)."""
+    return os.getenv("FINNHUB_API_KEY") or None
+
+
+# ---------------------------------------------------------------------------
+# Quote cache (shared by live + mock paths)
+# ---------------------------------------------------------------------------
+
+_quote_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
+_QUOTE_TTL = 60  # seconds — live quotes refresh every 60 s
+
+_news_cache: Dict[str, tuple[float, Dict[str, Any]]] = {}
+_NEWS_TTL = 600  # 10 min
+
+
+# ---------------------------------------------------------------------------
+# Finnhub helpers
+# ---------------------------------------------------------------------------
+
+
+def _finnhub_quote(ticker: str) -> Dict[str, Any] | None:
+    """Fetch a live quote from Finnhub /quote. Returns None on failure."""
+    key = _fh_key()
+    if not key:
+        return None
+    try:
+        with httpx.Client(timeout=10) as client:
+            r = client.get(
+                f"{_FINNHUB_BASE}/quote",
+                params={"symbol": ticker, "token": key},
+            )
+        r.raise_for_status()
+        d = r.json()
+        # Finnhub returns c=0 for unknown tickers
+        if d.get("c") and d["c"] > 0:
+            return {
+                "ticker": ticker,
+                "price": round(d["c"], 2),
+                "change": round(d.get("d") or 0, 2),
+                "changePct": round(d.get("dp") or 0, 2),
+                "volume": 0,  # Finnhub /quote doesn't include volume
+                "open": round(d.get("o") or 0, 2),
+                "high": round(d.get("h") or 0, 2),
+                "low": round(d.get("l") or 0, 2),
+                "prevClose": round(d.get("pc") or 0, 2),
+                "source": "finnhub",
+            }
+    except Exception:
+        logger.debug("Finnhub quote failed for %s", ticker, exc_info=True)
+    return None
+
+
+def _finnhub_news(ticker: str, limit: int = 5) -> List[Dict[str, str]] | None:
+    """Fetch recent company news from Finnhub /company-news."""
+    key = _fh_key()
+    if not key:
+        return None
+    try:
+        today = datetime.now(timezone.utc).date()
+        from_date = (today - timedelta(days=7)).isoformat()
+        to_date = today.isoformat()
+        with httpx.Client(timeout=10) as client:
+            r = client.get(
+                f"{_FINNHUB_BASE}/company-news",
+                params={
+                    "symbol": ticker,
+                    "from": from_date,
+                    "to": to_date,
+                    "token": key,
+                },
+            )
+        r.raise_for_status()
+        items = r.json()
+        if not isinstance(items, list):
+            return None
+        result = []
+        for item in items[:limit]:
+            result.append({
+                "headline": item.get("headline", ""),
+                "source": item.get("source", ""),
+                "date": datetime.fromtimestamp(
+                    item.get("datetime", 0), tz=timezone.utc
+                ).strftime("%Y-%m-%d") if item.get("datetime") else "",
+                "sentiment": "neutral",  # Finnhub doesn't include sentiment
+                "url": item.get("url", ""),
+            })
+        return result
+    except Exception:
+        logger.debug("Finnhub news failed for %s", ticker, exc_info=True)
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Mock data store (fallback when Finnhub unavailable)
 # ---------------------------------------------------------------------------
 
 _MOCK_QUOTES: Dict[str, Dict[str, Any]] = {
@@ -81,8 +187,23 @@ _MOCK_NEWS: Dict[str, List[Dict[str, str]]] = {
 @router.get("/quote")
 def get_quote(ticker: str = Query(..., min_length=1, max_length=10)) -> Dict[str, Any]:
     t = ticker.upper()
+
+    # Check cache first
+    if t in _quote_cache:
+        ts, cached = _quote_cache[t]
+        if time.time() - ts < _QUOTE_TTL:
+            return cached
+
+    # Try Finnhub live quote
+    live = _finnhub_quote(t)
+    if live:
+        _quote_cache[t] = (time.time(), live)
+        return live
+
+    # Fallback to mock
     if t in _MOCK_QUOTES:
-        return _MOCK_QUOTES[t]
+        mock = {**_MOCK_QUOTES[t], "source": "mock"}
+        return mock
     return {"ticker": t, "price": 0, "change": 0, "changePct": 0, "volume": 0, "error": "Ticker not found in dataset"}
 
 
@@ -127,8 +248,24 @@ def get_news(
     limit: int = Query(5, ge=1, le=20),
 ) -> Dict[str, Any]:
     t = ticker.upper()
+
+    # Check cache
+    if t in _news_cache:
+        ts, cached = _news_cache[t]
+        if time.time() - ts < _NEWS_TTL:
+            items = cached.get("items", [])[:limit]
+            return {"ticker": t, "count": len(items), "items": items, "source": cached.get("source", "cache")}
+
+    # Try Finnhub live news
+    live = _finnhub_news(t, limit=limit)
+    if live is not None:
+        result = {"ticker": t, "count": len(live), "items": live, "source": "finnhub"}
+        _news_cache[t] = (time.time(), {"items": live, "source": "finnhub"})
+        return result
+
+    # Fallback to mock
     items = _MOCK_NEWS.get(t, [])[:limit]
-    return {"ticker": t, "count": len(items), "items": items}
+    return {"ticker": t, "count": len(items), "items": items, "source": "mock"}
 
 
 @router.get("/filings")

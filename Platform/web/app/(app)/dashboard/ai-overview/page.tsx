@@ -119,7 +119,7 @@ export default function AIOverviewPage() {
         </div>
       )}
 
-      {/* Overview card */}
+      {/* Intelligence card */}
       <AIOverviewCard
         tickers={selectedTickers.length > 0 ? selectedTickers : undefined}
         timeframe={timeframe}
