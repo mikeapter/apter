@@ -90,8 +90,8 @@ def _extract_tickers_from_text(text: str) -> list[str]:
 def _extract_company_keywords(text: str) -> list[str]:
     """
     Extract likely company name keywords from question text.
-    E.g., "Hows apple doing?" → ["apple"]
-    E.g., "Compare Tesla and Microsoft" → ["Tesla", "Microsoft"]
+    E.g., "Hows apple doing?" -> ["apple"]
+    E.g., "Compare Tesla and Microsoft" -> ["Tesla", "Microsoft"]
     """
     # Split into words and filter
     words = _re.findall(r"[A-Za-z]+", text)
@@ -107,7 +107,7 @@ async def _resolve_tickers(question: str, explicit_tickers: list[str]) -> list[s
     Resolve tickers from the question using multiple strategies:
     1. Use explicitly provided tickers first
     2. Try to extract uppercase ticker symbols (e.g., AAPL, MSFT)
-    3. Search Finnhub for company name keywords (e.g., "apple" → AAPL)
+    3. Search Finnhub for company name keywords (e.g., "apple" -> AAPL)
     """
     if explicit_tickers:
         return explicit_tickers
