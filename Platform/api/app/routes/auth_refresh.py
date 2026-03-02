@@ -54,6 +54,7 @@ class RefreshRequest(BaseModel):
 
 class RefreshResponse(BaseModel):
     access_token: str
+    refresh_token: str  # new refresh token (rotated)
     token_type: str = "bearer"
     expires_in: int  # access token TTL in seconds
 
@@ -236,6 +237,7 @@ def refresh_token(
 
     return RefreshResponse(
         access_token=new_access,
+        refresh_token=new_refresh,
         token_type="bearer",
         expires_in=ACCESS_TOKEN_MINUTES * 60,
     )

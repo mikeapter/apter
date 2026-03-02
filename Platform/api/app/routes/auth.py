@@ -84,6 +84,7 @@ class RegisterResponse(BaseModel):
     first_name: str
     last_name: str
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
 
 
@@ -253,6 +254,7 @@ def register(
         first_name=user.first_name or "",
         last_name=user.last_name or "",
         access_token=tokens["access_token"],
+        refresh_token=tokens["refresh_token"],
     )
 
 
@@ -343,6 +345,7 @@ def login(
 
     return {
         "access_token": tokens["access_token"],
+        "refresh_token": tokens["refresh_token"],
         "token_type": "bearer",
     }
 
@@ -442,6 +445,7 @@ def login_2fa(
 
     return {
         "access_token": tokens["access_token"],
+        "refresh_token": tokens["refresh_token"],
         "token_type": "bearer",
     }
 

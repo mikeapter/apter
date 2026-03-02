@@ -1,12 +1,19 @@
 /**
  * Resilient fetch wrapper with auth token refresh.
- * - On 401: refresh token once (via HTTP-only cookie), retry original request
+ * - On 401: refresh token once, retry original request
+ * - Sends refresh token in request body (primary) AND via cookie (backup)
  * - On network error/timeout/5xx: DO NOT logout, show transient error
  * - Prevents refresh storms across tabs with in-memory lock
- * - Also sends Bearer header from localStorage for backward compat
  */
 
-import { getToken, setToken, clearToken, clearStoredUser } from "./auth";
+import {
+  getToken,
+  getRefreshToken,
+  setToken,
+  setRefreshToken,
+  clearToken,
+  clearStoredUser,
+} from "./auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 const TIMEOUT_MS = 12_000;
@@ -20,13 +27,18 @@ function buildUrl(path: string): string {
 }
 
 async function refreshAccessToken(): Promise<string | null> {
-  // The refresh token is in an HTTP-only cookie — the browser sends it
-  // automatically. We just POST to /auth/refresh with credentials: include.
+  // Send the refresh token in the request body (primary) so it works
+  // even if the HTTP-only cookie wasn't set due to proxy issues.
+  // The cookie is also sent via credentials: include as a backup.
+  const storedRefresh = getRefreshToken();
+
   try {
     const res = await fetch(buildUrl("/auth/refresh"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
+      body: JSON.stringify(
+        storedRefresh ? { refresh_token: storedRefresh } : {},
+      ),
       credentials: "include",
       cache: "no-store",
     });
@@ -35,11 +47,17 @@ async function refreshAccessToken(): Promise<string | null> {
 
     const data = await res.json();
     if (data.access_token) {
-      // Store the new bearer token in localStorage for backward compat
-      const remember = typeof window !== "undefined"
-        ? localStorage.getItem("apter_remember") === "1"
-        : false;
+      const remember =
+        typeof window !== "undefined"
+          ? localStorage.getItem("apter_remember") === "1"
+          : false;
       setToken(data.access_token, remember);
+
+      // Store the rotated refresh token
+      if (data.refresh_token) {
+        setRefreshToken(data.refresh_token);
+      }
+
       return data.access_token;
     }
     return null;
@@ -114,7 +132,7 @@ export async function fetchWithAuth<T>(
       return { ok: true, data, status: res.status };
     }
 
-    // 401: Try refresh once (cookie-based)
+    // 401: Try refresh once
     if (res.status === 401) {
       const newToken = await getRefreshedToken();
       if (newToken) {

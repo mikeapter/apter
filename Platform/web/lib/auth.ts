@@ -2,17 +2,14 @@
  * Client-side auth token helpers.
  *
  * Access token: stored in localStorage (short-lived, 10 min).
- * Refresh token: stored in an HTTP-only cookie set by the API (not accessible
- * from JS). The browser sends it automatically on /auth/* requests.
+ * Refresh token: stored in localStorage AND as an HTTP-only cookie.
+ *   localStorage is the primary source for refresh because Next.js
+ *   proxy rewrites can silently drop Set-Cookie headers.
  * Session cookie: lightweight indicator for Next.js middleware SSR redirect.
- *
- * The server sets httpOnly cookies (apter_at, apter_refresh) via Set-Cookie
- * headers.  We also set the apter_session indicator cookie client-side
- * because Next.js rewrite proxies can silently drop Set-Cookie headers
- * from external backends.
  */
 
 const LS_TOKEN = "apter_token";
+const LS_REFRESH = "apter_refresh_token";
 const COOKIE_NAME = "apter_session";
 const USER_KEY = "apter_user";
 
@@ -32,12 +29,16 @@ export function getToken(): string | null {
   }
 }
 
+export function getRefreshToken(): string | null {
+  try {
+    return localStorage.getItem(LS_REFRESH);
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Store auth token in localStorage and set the apter_session indicator cookie.
- *
- * The server also sets apter_session via Set-Cookie, but the route proxy
- * sets it as a belt-and-suspenders measure.  Setting it here ensures
- * Next.js middleware always sees it on subsequent hard navigations.
+ * Store auth tokens in localStorage and set the apter_session indicator cookie.
  */
 export function setToken(token: string, remember = false): void {
   try {
@@ -57,9 +58,20 @@ export function setToken(token: string, remember = false): void {
   }
 }
 
+/**
+ * Store the refresh token in localStorage so the client can send it
+ * in the request body on /auth/refresh, bypassing cookie issues.
+ */
+export function setRefreshToken(token: string): void {
+  try {
+    localStorage.setItem(LS_REFRESH, token);
+  } catch {}
+}
+
 export function clearToken(): void {
   try {
     localStorage.removeItem(LS_TOKEN);
+    localStorage.removeItem(LS_REFRESH);
     localStorage.removeItem("apter_remember");
   } catch {}
   document.cookie = `${COOKIE_NAME}=; path=/; max-age=0`;
