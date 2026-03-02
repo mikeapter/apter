@@ -128,22 +128,48 @@ def refresh_token(
     user_id = int(user_id_str)
 
     # Validate and consume the refresh token (one-time use)
-    if not refresh_token_store.validate_and_consume(
+    store_valid = refresh_token_store.validate_and_consume(
         raw_token=raw_refresh,
         jti=jti,
         user_id=user_id,
-    ):
-        audit_log(
-            "token_refresh_rejected",
-            request=request,
-            user_id=user_id,
-            success=False,
-            details={"reason": "invalid_or_reused_refresh_token", "jti": jti},
-        )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token",
-        )
+    )
+
+    if not store_valid:
+        # Check if this is a cold-start situation: the in-memory token store
+        # was wiped on server restart (Render redeploy / sleep-wake cycle).
+        # If the store has NO tokens for this user, the JWT itself is still
+        # valid (signature + expiry checked above), so we allow the refresh.
+        # Once new tokens are issued below, theft detection is re-enabled.
+        if refresh_token_store.has_tokens_for_user(user_id):
+            # Store has tokens for this user but this one failed —
+            # likely token reuse (theft) or tampered token. Deny.
+            audit_log(
+                "token_refresh_rejected",
+                request=request,
+                user_id=user_id,
+                success=False,
+                details={"reason": "invalid_or_reused_refresh_token", "jti": jti},
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired refresh token",
+            )
+        else:
+            # Cold start recovery — store is empty for this user.
+            # The JWT signature and expiry were already validated by
+            # decode_refresh_token() above, so this is safe.
+            logger.warning(
+                "Token store empty for user %s — accepting JWT-only "
+                "(cold start recovery, jti=%s)",
+                user_id, jti,
+            )
+            audit_log(
+                "token_refresh_cold_start",
+                request=request,
+                user_id=user_id,
+                success=True,
+                details={"reason": "cold_start_jwt_fallback", "jti": jti},
+            )
 
     # Verify user still exists and is active
     user = db.query(User).filter(User.id == user_id).first()

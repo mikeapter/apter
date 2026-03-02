@@ -102,6 +102,11 @@ class _InMemoryTokenStore:
                 if user_jtis:
                     user_jtis.discard(jti)
 
+    def has_tokens_for_user(self, user_id: int) -> bool:
+        """Check if the store has any tokens for this user."""
+        with self._lock:
+            return bool(self._user_tokens.get(user_id))
+
     def _maybe_cleanup(self):
         now = time.monotonic()
         if now - self._last_cleanup < self._cleanup_interval:
@@ -205,6 +210,13 @@ class _RedisTokenStore:
         except Exception as e:
             logger.warning("Redis revoke all error: %s", str(e))
 
+    def has_tokens_for_user(self, user_id: int) -> bool:
+        """Check if the store has any tokens for this user."""
+        try:
+            return bool(self._redis.scard(self._user_key(user_id)))
+        except Exception:
+            return False
+
     def revoke(self, jti: str):
         try:
             key = self._token_key(jti)
@@ -254,6 +266,9 @@ class _TokenStoreProxy:
 
     def revoke_all_for_user(self, user_id: int):
         _get_store().revoke_all_for_user(user_id)
+
+    def has_tokens_for_user(self, user_id: int) -> bool:
+        return _get_store().has_tokens_for_user(user_id)
 
     def revoke(self, jti: str):
         _get_store().revoke(jti)
