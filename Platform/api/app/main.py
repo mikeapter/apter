@@ -19,6 +19,7 @@ from app.routes import data as data_routes
 from app.routes import stocks as stocks_routes
 from app.routes import market as market_routes
 from app.routes import market_brief
+from app.routes import portfolio as portfolio_routes
 from app.db.init_db import init_db
 from app.services.finnhub.config import log_status as finnhub_log_status
 
@@ -118,3 +119,4 @@ app.include_router(password_reset.router)  # /auth/forgot-password, /auth/reset-
 app.include_router(data_routes.router)      # /api/data/* tool endpoints
 app.include_router(market_routes.router)    # /api/market/* Finnhub endpoints
 app.include_router(market_brief.router)     # /api/market-brief
+app.include_router(portfolio_routes.router) # /api/portfolio/* portfolio analytics
