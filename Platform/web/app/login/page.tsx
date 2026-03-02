@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { apiPost, apiGet } from "@/lib/api";
-import { setToken, setRefreshToken, setStoredUser } from "@/lib/auth";
+import { getRefreshToken, setToken, setRefreshToken, setStoredUser } from "@/lib/auth";
 import { track } from "@/lib/analytics";
 import { validateEmail } from "@/lib/validation";
 
@@ -33,6 +33,74 @@ export default function LoginPage() {
   const [emailTouched, setEmailTouched] = React.useState(false);
   const [serverError, setServerError] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
+  const [recovering, setRecovering] = React.useState(false);
+
+  // Auto-recovery: if localStorage still has a valid refresh token but the
+  // apter_session cookie was lost (browser closed, privacy settings, etc.),
+  // silently re-authenticate instead of showing the login form.
+  React.useEffect(() => {
+    const rt = getRefreshToken();
+    if (!rt) return;
+
+    setRecovering(true);
+
+    (async () => {
+      try {
+        const res = await apiPost<{
+          access_token: string;
+          refresh_token?: string;
+        }>("/auth/refresh", { refresh_token: rt });
+
+        if (res.ok && res.data.access_token) {
+          const remember =
+            typeof window !== "undefined"
+              ? localStorage.getItem("apter_remember") === "1"
+              : false;
+          setToken(res.data.access_token, remember);
+          if (res.data.refresh_token) {
+            setRefreshToken(res.data.refresh_token);
+          }
+
+          // Fetch user profile so greeting works
+          try {
+            const profileRes = await apiGet<ProfileResponse>(
+              "/api/me",
+              undefined,
+              res.data.access_token,
+            );
+            if (profileRes.ok) {
+              setStoredUser({
+                id: profileRes.data.id,
+                email: profileRes.data.email,
+                first_name: profileRes.data.first_name,
+                last_name: profileRes.data.last_name,
+                full_name: profileRes.data.full_name,
+              });
+            }
+          } catch {
+            // Profile fetch failed — non-critical
+          }
+
+          const params = new URLSearchParams(window.location.search);
+          const next = params.get("next") || "/dashboard";
+          router.replace(next);
+          return;
+        }
+
+        // HTTP error (401/403) — refresh token is invalid, clear it
+        if (!res.ok && res.status) {
+          try {
+            localStorage.removeItem("apter_refresh_token");
+          } catch {}
+        }
+        // If no status → network error; keep token for next attempt
+      } catch {
+        // Network error — keep token for next attempt
+      }
+
+      setRecovering(false);
+    })();
+  }, [router]);
 
   React.useEffect(() => {
     track("login_started");
@@ -120,6 +188,24 @@ export default function LoginPage() {
 
     track("login_completed");
     router.push("/dashboard");
+  }
+
+  if (recovering) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center py-12 px-4">
+        <div className="auth-card text-center">
+          <Image
+            src="/logo.png"
+            alt="Apter Financial"
+            width={32}
+            height={32}
+            priority
+            className="h-8 w-8 rounded-full mx-auto mb-4"
+          />
+          <p className="text-sm text-muted-foreground">Restoring session...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
