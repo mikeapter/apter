@@ -52,8 +52,8 @@ function saveHoldings(holdings: PortfolioHolding[]) {
   } catch {}
 }
 
-function enrichHolding(h: PortfolioHolding): EnrichedHolding {
-  const currentPrice = getMockPrice(h.ticker);
+function enrichHolding(h: PortfolioHolding, livePrices: Record<string, number>): EnrichedHolding {
+  const currentPrice = livePrices[h.ticker] ?? getMockPrice(h.ticker);
   const costBasis = h.shares * h.purchasePrice;
   const positionValue = h.shares * currentPrice;
   const unrealizedPL = positionValue - costBasis;
@@ -73,10 +73,44 @@ function enrichHolding(h: PortfolioHolding): EnrichedHolding {
 
 export function PortfolioProvider({ children }: { children: React.ReactNode }) {
   const [raw, setRaw] = useState<PortfolioHolding[]>([]);
+  const [livePrices, setLivePrices] = useState<Record<string, number>>({});
 
   useEffect(() => {
     setRaw(loadHoldings());
   }, []);
+
+  // Fetch live prices from Finnhub via /api/market/quote
+  useEffect(() => {
+    const tickers = [...new Set(raw.map((h) => h.ticker))];
+    if (tickers.length === 0) return;
+
+    let cancelled = false;
+
+    Promise.all(
+      tickers.map(async (ticker) => {
+        try {
+          const res = await fetch(
+            `/api/market/quote?symbol=${encodeURIComponent(ticker)}`,
+            { cache: "no-store" },
+          );
+          if (!res.ok) return { ticker, price: null };
+          const data = await res.json();
+          return { ticker, price: typeof data.price === "number" ? data.price : null };
+        } catch {
+          return { ticker, price: null };
+        }
+      }),
+    ).then((results) => {
+      if (cancelled) return;
+      const prices: Record<string, number> = {};
+      for (const r of results) {
+        if (r.price !== null) prices[r.ticker] = r.price;
+      }
+      setLivePrices(prices);
+    });
+
+    return () => { cancelled = true; };
+  }, [raw]);
 
   const persist = useCallback((next: PortfolioHolding[]) => {
     setRaw(next);
@@ -113,7 +147,7 @@ export function PortfolioProvider({ children }: { children: React.ReactNode }) {
     [raw, persist]
   );
 
-  const holdings = useMemo(() => raw.map(enrichHolding), [raw]);
+  const holdings = useMemo(() => raw.map((h) => enrichHolding(h, livePrices)), [raw, livePrices]);
 
   const totalValue = useMemo(() => holdings.reduce((sum, h) => sum + h.positionValue, 0), [holdings]);
   const totalCost = useMemo(() => holdings.reduce((sum, h) => sum + h.costBasis, 0), [holdings]);
