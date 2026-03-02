@@ -6,9 +6,10 @@
  * from JS). The browser sends it automatically on /auth/* requests.
  * Session cookie: lightweight indicator for Next.js middleware SSR redirect.
  *
- * The server owns all cookie management (apter_at, apter_refresh, apter_session)
- * via Set-Cookie headers. We do NOT set cookies client-side to avoid
- * overwriting the server's persistent cookie settings.
+ * The server sets httpOnly cookies (apter_at, apter_refresh) via Set-Cookie
+ * headers.  We also set the apter_session indicator cookie client-side
+ * because Next.js rewrite proxies can silently drop Set-Cookie headers
+ * from external backends.
  */
 
 const LS_TOKEN = "apter_token";
@@ -32,17 +33,28 @@ export function getToken(): string | null {
 }
 
 /**
- * Store auth token in localStorage for backward compat.
+ * Store auth token in localStorage and set the apter_session indicator cookie.
  *
- * The server owns all cookie management (apter_at, apter_refresh, apter_session)
- * via Set-Cookie headers. We do NOT set apter_session here to avoid
- * overwriting the server's persistent cookie with a session cookie.
+ * The server also sets apter_session via Set-Cookie, but the route proxy
+ * sets it as a belt-and-suspenders measure.  Setting it here ensures
+ * Next.js middleware always sees it on subsequent hard navigations.
  */
 export function setToken(token: string, remember = false): void {
   try {
     localStorage.setItem(LS_TOKEN, token);
     localStorage.setItem("apter_remember", remember ? "1" : "0");
   } catch {}
+
+  // Set the session indicator cookie for Next.js middleware.
+  const secure =
+    typeof window !== "undefined" && window.location.protocol === "https:"
+      ? "; Secure"
+      : "";
+  if (remember) {
+    document.cookie = `${COOKIE_NAME}=1; path=/; max-age=${30 * 86400}; SameSite=Lax${secure}`;
+  } else {
+    document.cookie = `${COOKIE_NAME}=1; path=/; SameSite=Lax${secure}`;
+  }
 }
 
 export function clearToken(): void {
