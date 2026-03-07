@@ -65,6 +65,8 @@ body {
     font-variant-numeric: tabular-nums;
     /* Prevent overscroll bounce on iOS */
     overscroll-behavior-y: none;
+    /* Prevent horizontal scroll on mobile */
+    overflow-x: hidden;
   }
 
   /* Smooth scroll for anchor links */
