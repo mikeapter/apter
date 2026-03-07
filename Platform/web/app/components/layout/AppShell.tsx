@@ -34,7 +34,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
 
         {/* Scrollable content area */}
-        <main className="flex-1 min-w-0 overflow-auto px-4 py-4 pb-[calc(80px+env(safe-area-inset-bottom,0px))] lg:pb-4">
+        <main className="flex-1 min-w-0 overflow-auto px-4 py-4 pb-[calc(80px_+_env(safe-area-inset-bottom,0px))] lg:pb-4">
           {children}
         </main>
       </div>

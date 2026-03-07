@@ -49,7 +49,7 @@ function v2ToLegacy(answer: ApterIntelligenceAnswer): AIResponse {
 
 export function AIAssistantPanel() {
   const [open, setOpen] = useState(false);
-  const [snap, setSnap] = useState<number | string | null>(0.6);
+  const [snap, setSnap] = useState<number | string | null>(0.75);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -284,7 +284,7 @@ export function AIAssistantPanel() {
     <Drawer.Root
       open={open}
       onOpenChange={setOpen}
-      snapPoints={[0.25, 0.6, 0.92]}
+      snapPoints={[0.5, 0.75, 0.95]}
       activeSnapPoint={snap}
       setActiveSnapPoint={setSnap}
       modal
@@ -293,7 +293,7 @@ export function AIAssistantPanel() {
       <Drawer.Trigger asChild>
         <button
           type="button"
-          className="fixed bottom-[calc(80px+env(safe-area-inset-bottom,0px))] right-4 lg:bottom-6 lg:right-6 z-40 h-12 w-12 rounded-full border border-border bg-panel/90 backdrop-blur-md shadow-lg flex items-center justify-center hover:bg-muted transition-colors"
+          className="fixed bottom-[calc(80px_+_env(safe-area-inset-bottom,0px))] right-4 lg:bottom-6 lg:right-6 z-40 h-12 w-12 rounded-full border border-border bg-panel/90 backdrop-blur-md shadow-lg flex items-center justify-center hover:bg-muted transition-colors"
           title="Open Apter Intelligence"
         >
           <Sparkles size={20} />
@@ -301,8 +301,8 @@ export function AIAssistantPanel() {
       </Drawer.Trigger>
 
       <Drawer.Portal>
-        <Drawer.Overlay className="fixed inset-0 z-50 bg-black/40" />
-        <Drawer.Content className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-card border-t border-border outline-none">
+        <Drawer.Overlay className="fixed inset-0 z-[60] bg-black/50" />
+        <Drawer.Content className="fixed bottom-0 left-0 right-0 z-[60] rounded-t-3xl bg-card border-t border-border outline-none">
           <div className="flex flex-col h-full overflow-hidden">
             {/* ── Drag handle ── */}
             <div className="flex-shrink-0 pt-3 pb-1">
