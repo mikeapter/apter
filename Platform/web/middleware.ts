@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const PUBLIC_PATHS = new Set(["/", "/login", "/signup", "/register", "/forgot-password", "/reset-password", "/plans", "/terms", "/privacy", "/disclaimer", "/risk-disclosure", "/contact", "/about"]);
 
-const PUBLIC_PREFIXES = ["/api/", "/auth/", "/v1/", "/2fa/", "/_next/", "/favicon", "/logo"];
+const PUBLIC_PREFIXES = ["/api/", "/auth/", "/v1/", "/2fa/", "/_next/", "/favicon", "/logo", "/manifest"];
 
 // Build connect-src dynamically to include the API origin if set
 const _apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "";

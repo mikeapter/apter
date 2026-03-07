@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Sparkles, X, Send, Database, RefreshCw, AlertCircle, Shield } from "lucide-react";
+import { Drawer } from "vaul";
 import { chatStream, chatJSON, type AIResponse } from "../../lib/api/ai";
 import {
   askApterIntelligence,
@@ -48,6 +49,7 @@ function v2ToLegacy(answer: ApterIntelligenceAnswer): AIResponse {
 
 export function AIAssistantPanel() {
   const [open, setOpen] = useState(false);
+  const [snap, setSnap] = useState<number | string | null>(0.6);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -278,178 +280,203 @@ export function AIAssistantPanel() {
     setTickers((prev) => prev.filter((x) => x !== t));
   }
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="fixed bottom-16 right-6 z-40 h-12 w-12 rounded-full border border-border bg-panel shadow-lg flex items-center justify-center hover:bg-muted transition-colors"
-        title="Open Apter Intelligence"
-      >
-        <Sparkles size={20} />
-      </button>
-    );
-  }
-
   return (
-    <div className="fixed bottom-16 right-6 z-40 w-[420px] max-h-[75vh] rounded-md border border-border bg-card shadow-xl flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-panel">
-        <div className="flex items-center gap-2">
-          <Sparkles size={14} />
-          <div>
-            <span className="text-sm font-semibold">Apter Intelligence</span>
-            <span className="block text-[9px] text-muted-foreground leading-tight">Institutional-grade analysis</span>
-          </div>
-          {USE_V2 && (
-            <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded px-1 py-0.5 font-mono">
-              LIVE
-            </span>
-          )}
-        </div>
+    <Drawer.Root
+      open={open}
+      onOpenChange={setOpen}
+      snapPoints={[0.25, 0.6, 0.92]}
+      activeSnapPoint={snap}
+      setActiveSnapPoint={setSnap}
+      modal
+    >
+      {/* ── Floating Action Button (trigger) ── */}
+      <Drawer.Trigger asChild>
         <button
           type="button"
-          onClick={() => setOpen(false)}
-          className="text-muted-foreground hover:text-foreground"
+          className="fixed bottom-[calc(80px+env(safe-area-inset-bottom,0px))] right-4 lg:bottom-6 lg:right-6 z-40 h-12 w-12 rounded-full border border-border bg-panel/90 backdrop-blur-md shadow-lg flex items-center justify-center hover:bg-muted transition-colors"
+          title="Open Apter Intelligence"
         >
-          <X size={16} />
+          <Sparkles size={20} />
         </button>
-      </div>
+      </Drawer.Trigger>
 
-      {/* Context selector (tickers) */}
-      <div className="px-3 py-1.5 border-b border-border flex items-center gap-1.5 flex-wrap">
-        <Database size={10} className="text-muted-foreground shrink-0" />
-        {tickers.map((t) => (
-          <span
-            key={t}
-            className="text-[10px] bg-panel border border-border rounded px-1.5 py-0.5 font-mono flex items-center gap-1"
-          >
-            {t}
-            <button
-              type="button"
-              onClick={() => removeTicker(t)}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <X size={8} />
-            </button>
-          </span>
-        ))}
-        <input
-          type="text"
-          value={tickerInput}
-          onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              addTicker();
-            }
-          }}
-          placeholder={tickers.length ? "Add ticker..." : "Add tickers for context..."}
-          className="flex-1 min-w-[80px] h-5 bg-transparent text-[10px] outline-none placeholder:text-muted-foreground/60"
-        />
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 overflow-auto p-3 space-y-3 min-h-[200px] max-h-[400px]">
-        {messages.length === 0 && (
-          <div className="space-y-3">
-            <div className="text-center text-muted-foreground text-sm py-4">
-              <Sparkles size={24} className="mx-auto mb-2 opacity-40" />
-              <p>Institutional-grade financial analysis. Ask about any stock, market conditions, or financial metric.</p>
+      <Drawer.Portal>
+        <Drawer.Overlay className="fixed inset-0 z-50 bg-black/40" />
+        <Drawer.Content className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-card border-t border-border outline-none">
+          <div className="flex flex-col h-full overflow-hidden">
+            {/* ── Drag handle ── */}
+            <div className="flex-shrink-0 pt-3 pb-1">
+              <div className="mx-auto w-12 h-1.5 rounded-full bg-muted-foreground/20" />
             </div>
-            <AIPromptCards onSelect={(prompt) => handleSubmit(prompt)} />
-          </div>
-        )}
-        {messages.map((msg) => (
-          <div key={msg.id}>
-            {/* Data quality badge for V2 responses */}
-            {USE_V2 && msg.role === "assistant" && msg.dataQuality && !msg.isStreaming && !msg.isError && (
-              <div className="flex items-center gap-1.5 mb-1">
-                <span
-                  className={`text-[9px] font-mono rounded px-1.5 py-0.5 border ${
-                    msg.dataQuality === "live"
-                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                      : msg.dataQuality === "partial"
-                        ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                        : "bg-red-500/10 text-red-400 border-red-500/20"
-                  }`}
-                >
-                  {msg.dataQuality === "live"
-                    ? "LIVE DATA"
-                    : msg.dataQuality === "partial"
-                      ? "PARTIAL DATA"
-                      : "DATA UNAVAILABLE"}
-                </span>
-              </div>
-            )}
 
-            {/* Error with retry */}
-            {msg.isError && USE_V2 ? (
-              <div className="flex justify-start">
-                <div className="max-w-[95%] rounded-md bg-red-500/5 border border-red-500/20 px-3 py-2 space-y-2">
-                  <div className="flex items-center gap-1.5 text-red-400 text-xs">
-                    <AlertCircle size={12} />
-                    <span>{msg.content}</span>
-                  </div>
+            {/* ── Header ── */}
+            <div className="flex items-center justify-between px-4 py-2 border-b border-border flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <Sparkles size={16} />
+                <div>
+                  <Drawer.Title className="text-sm font-semibold">
+                    Apter Intelligence
+                  </Drawer.Title>
+                  <Drawer.Description className="sr-only">
+                    AI-powered financial analysis assistant
+                  </Drawer.Description>
+                  <span className="block text-[9px] text-muted-foreground leading-tight">
+                    Institutional-grade analysis
+                  </span>
+                </div>
+                {USE_V2 && (
+                  <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded px-1 py-0.5 font-mono">
+                    LIVE
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="h-9 w-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* ── Context selector (tickers) ── */}
+            <div className="px-4 py-2 border-b border-border flex items-center gap-1.5 flex-wrap flex-shrink-0">
+              <Database size={10} className="text-muted-foreground shrink-0" />
+              {tickers.map((t) => (
+                <span
+                  key={t}
+                  className="text-[10px] bg-panel border border-border rounded-lg px-1.5 py-0.5 font-mono flex items-center gap-1"
+                >
+                  {t}
                   <button
                     type="button"
-                    onClick={handleRetry}
-                    disabled={sending}
-                    className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-30"
+                    onClick={() => removeTicker(t)}
+                    className="text-muted-foreground hover:text-foreground"
                   >
-                    <RefreshCw size={10} />
-                    Retry
+                    <X size={8} />
                   </button>
-                </div>
-              </div>
-            ) : (
-              <AIMessage
-                role={msg.role}
-                content={msg.content}
-                structured={msg.structured}
-                messageId={msg.role === "assistant" ? msg.id : undefined}
-                isStreaming={msg.isStreaming}
+                </span>
+              ))}
+              <input
+                type="text"
+                value={tickerInput}
+                onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addTicker();
+                  }
+                }}
+                placeholder={tickers.length ? "Add ticker..." : "Add tickers for context..."}
+                className="flex-1 min-w-[80px] h-6 bg-transparent text-[10px] outline-none placeholder:text-muted-foreground/60"
               />
+            </div>
+
+            {/* ── Messages ── */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
+              {messages.length === 0 && (
+                <div className="space-y-3">
+                  <div className="text-center text-muted-foreground text-sm py-4">
+                    <Sparkles size={24} className="mx-auto mb-2 opacity-40" />
+                    <p>Institutional-grade financial analysis. Ask about any stock, market conditions, or financial metric.</p>
+                  </div>
+                  <AIPromptCards onSelect={(prompt) => handleSubmit(prompt)} />
+                </div>
+              )}
+              {messages.map((msg) => (
+                <div key={msg.id}>
+                  {/* Data quality badge for V2 responses */}
+                  {USE_V2 && msg.role === "assistant" && msg.dataQuality && !msg.isStreaming && !msg.isError && (
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span
+                        className={`text-[9px] font-mono rounded px-1.5 py-0.5 border ${
+                          msg.dataQuality === "live"
+                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                            : msg.dataQuality === "partial"
+                              ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                              : "bg-red-500/10 text-red-400 border-red-500/20"
+                        }`}
+                      >
+                        {msg.dataQuality === "live"
+                          ? "LIVE DATA"
+                          : msg.dataQuality === "partial"
+                            ? "PARTIAL DATA"
+                            : "DATA UNAVAILABLE"}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Error with retry */}
+                  {msg.isError && USE_V2 ? (
+                    <div className="flex justify-start">
+                      <div className="max-w-[95%] rounded-2xl bg-red-500/5 border border-red-500/20 px-3 py-2 space-y-2">
+                        <div className="flex items-center gap-1.5 text-red-400 text-xs">
+                          <AlertCircle size={12} />
+                          <span>{msg.content}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRetry}
+                          disabled={sending}
+                          className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-30"
+                        >
+                          <RefreshCw size={10} />
+                          Retry
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <AIMessage
+                      role={msg.role}
+                      content={msg.content}
+                      structured={msg.structured}
+                      messageId={msg.role === "assistant" ? msg.id : undefined}
+                      isStreaming={msg.isStreaming}
+                    />
+                  )}
+                </div>
+              ))}
+              <div ref={bottomRef} />
+            </div>
+
+            {/* ── Input ── */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSubmit();
+              }}
+              className="border-t border-border px-4 py-3 flex gap-2 flex-shrink-0"
+              style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom, 12px))" }}
+            >
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask a question..."
+                disabled={sending}
+                className="flex-1 h-11 rounded-xl border border-border bg-background px-4 text-sm outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={sending || !input.trim()}
+                className="h-11 w-11 rounded-xl border border-border flex items-center justify-center hover:bg-muted disabled:opacity-30 transition-colors"
+              >
+                <Send size={16} />
+              </button>
+            </form>
+
+            {/* ── Footer disclaimer ── */}
+            {USE_V2 && (
+              <div className="px-4 py-1.5 border-t border-border/50 flex items-center gap-1.5 flex-shrink-0">
+                <Shield size={8} className="text-muted-foreground/50 shrink-0" />
+                <p className="text-[9px] text-muted-foreground/50">
+                  Not investment advice. For informational purposes only.
+                </p>
+              </div>
             )}
           </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
-
-      {/* Input */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleSubmit();
-        }}
-        className="border-t border-border px-3 py-2 flex gap-2"
-      >
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask a question..."
-          disabled={sending}
-          className="flex-1 h-8 rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-50"
-        />
-        <button
-          type="submit"
-          disabled={sending || !input.trim()}
-          className="h-8 w-8 rounded-md border border-border flex items-center justify-center hover:bg-muted disabled:opacity-30"
-        >
-          <Send size={14} />
-        </button>
-      </form>
-
-      {/* Footer disclaimer */}
-      {USE_V2 && (
-        <div className="px-3 py-1.5 border-t border-border/50 flex items-center gap-1.5">
-          <Shield size={8} className="text-muted-foreground/50 shrink-0" />
-          <p className="text-[9px] text-muted-foreground/50">
-            Not investment advice. For informational purposes only.
-          </p>
-        </div>
-      )}
-    </div>
+        </Drawer.Content>
+      </Drawer.Portal>
+    </Drawer.Root>
   );
 }
