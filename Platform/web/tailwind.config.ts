@@ -55,7 +55,10 @@ const config: Config = {
         ],
       },
       borderRadius: {
-        lg: "0.375rem",  // 6px (less “app-y”)
+        "3xl": "1.5rem", // 24px — sheets, modals
+        "2xl": "1rem",   // 16px — mobile cards
+        xl: "0.75rem",   // 12px — buttons, inputs
+        lg: "0.375rem",  // 6px
         md: "0.25rem",   // 4px
         sm: "0.1875rem", // 3px
       },

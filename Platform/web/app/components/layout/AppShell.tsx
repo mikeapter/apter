@@ -11,7 +11,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="h-screen flex flex-col bg-background text-foreground">
+    <div className="app-shell-height flex flex-col bg-background text-foreground">
       <Topbar onOpenMobile={() => setMobileOpen(true)} />
 
       <div className="flex flex-1 min-h-0">
@@ -34,7 +34,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
 
         {/* Scrollable content area */}
-        <main className="flex-1 min-w-0 overflow-auto px-3 py-3 sm:px-4 sm:py-4 pb-20 lg:pb-4">
+        <main className="flex-1 min-w-0 overflow-auto px-4 py-4 pb-[calc(80px_+_env(safe-area-inset-bottom,0px))] lg:pb-4">
           {children}
         </main>
       </div>

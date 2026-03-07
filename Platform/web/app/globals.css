@@ -38,6 +38,14 @@
   /* Accent for primary actions */
   --accent: 210 12% 90%;
   --accent-foreground: 240 100% 6.9%;
+
+  /* Safe-area insets as CSS vars */
+  --sai-top: env(safe-area-inset-top, 0px);
+  --sai-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* Layout constants */
+  --topbar-h: 56px;
+  --bottomnav-h: 64px;
 }
 
 html,
@@ -55,11 +63,15 @@ body {
     background-color: var(--background-hex);
     @apply text-foreground;
     font-variant-numeric: tabular-nums;
+    /* Prevent overscroll bounce on iOS */
+    overscroll-behavior-y: none;
   }
 
   /* Smooth scroll for anchor links */
   html {
     scroll-behavior: smooth;
+    /* iOS safe area viewport */
+    -webkit-text-size-adjust: 100%;
   }
 
   /* Focus visible ring for accessibility */
@@ -72,7 +84,7 @@ body {
 /* Component primitives */
 @layer components {
   .bt-panel {
-    @apply rounded-md border bg-card text-card-foreground;
+    @apply rounded-2xl border bg-card text-card-foreground;
   }
 
   .bt-panel-title {
@@ -84,15 +96,15 @@ body {
   }
 
   .bt-button {
-    @apply inline-flex items-center justify-center rounded-md border border-border bg-transparent px-3 py-2 text-sm font-medium;
+    @apply inline-flex items-center justify-center rounded-xl border border-border bg-transparent px-3 py-2 text-sm font-medium min-h-[44px];
   }
 
   .bt-button-primary {
-    @apply inline-flex items-center justify-center rounded-md bg-foreground text-background px-4 py-2 text-sm font-medium transition-opacity duration-150 hover:opacity-90;
+    @apply inline-flex items-center justify-center rounded-xl bg-foreground text-background px-4 py-2 text-sm font-medium transition-opacity duration-150 hover:opacity-90 min-h-[44px];
   }
 
   .bt-input {
-    @apply w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none transition-colors duration-150 focus:ring-2 focus:ring-ring/40;
+    @apply w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none transition-colors duration-150 focus:ring-2 focus:ring-ring/40 min-h-[44px];
   }
 
   .bt-label {
@@ -100,7 +112,7 @@ body {
   }
 
   .bt-chip {
-    @apply inline-flex items-center gap-2 rounded-sm border bg-panel-2 px-2.5 py-0.5 text-[11px] font-medium;
+    @apply inline-flex items-center gap-2 rounded-lg border bg-panel-2 px-2.5 py-0.5 text-[11px] font-medium;
   }
   .bt-chip-on {
     @apply border-risk-on/40 text-risk-on;
@@ -114,7 +126,7 @@ body {
 
   /* Auth form container */
   .auth-card {
-    @apply w-full max-w-md mx-auto rounded-lg border border-border bg-card p-6 sm:p-8;
+    @apply w-full max-w-md mx-auto rounded-2xl border border-border bg-card p-6 sm:p-8;
   }
 
   /* Inline validation message */
@@ -124,4 +136,36 @@ body {
   .field-success {
     @apply text-xs text-risk-on mt-1;
   }
+}
+
+/* ── Safe-area utilities ── */
+@layer utilities {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .mb-safe {
+    margin-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* ── App shell height with dvh fallback ── */
+.app-shell-height {
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* ── Vaul drawer theme overrides ── */
+[vaul-drawer] {
+  background-color: hsl(var(--card)) !important;
+}
+
+[vaul-overlay] {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+[vaul-drawer]::after {
+  display: none !important;
 }

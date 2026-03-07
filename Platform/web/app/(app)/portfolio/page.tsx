@@ -8,6 +8,9 @@ import {
   TrendingUp,
   TrendingDown,
   AlertTriangle,
+  BarChart3,
+  PieChart,
+  ShieldAlert,
 } from "lucide-react";
 import { PortfolioProvider, usePortfolio } from "../../providers/PortfolioProvider";
 import { COMPLIANCE } from "../../lib/compliance";
@@ -88,14 +91,39 @@ function AddHoldingForm({
         />
       </div>
       <div className="flex gap-2">
-        <button type="submit" className="bt-button h-10 px-6">
+        <button type="submit" className="bt-button-primary px-6">
           Add
         </button>
-        <button type="button" onClick={onCancel} className="bt-button h-10 px-4">
+        <button type="button" onClick={onCancel} className="bt-button px-4">
           Cancel
         </button>
       </div>
     </form>
+  );
+}
+
+// ─── Skeleton Performance Preview ────────────────────────────────────────────
+
+function PerformancePreview() {
+  const bars = [40, 55, 35, 65, 50, 70, 45, 60, 75, 50, 65, 58];
+  return (
+    <div className="bt-panel p-4">
+      <div className="bt-panel-title mb-3">Performance Preview</div>
+      <div className="flex items-end gap-1 h-16">
+        {bars.map((h, i) => (
+          <div
+            key={i}
+            className="flex-1 rounded-sm bg-muted-foreground/10"
+            style={{ height: `${h}%` }}
+          />
+        ))}
+      </div>
+      <div className="flex justify-between mt-2">
+        <span className="text-[10px] text-muted-foreground/40">1M</span>
+        <span className="text-[10px] text-muted-foreground/40">6M</span>
+        <span className="text-[10px] text-muted-foreground/40">1Y</span>
+      </div>
+    </div>
   );
 }
 
@@ -202,7 +230,7 @@ function PortfolioContent() {
 
   if (holdings.length === 0) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div>
           <div className="text-2xl font-semibold">My Portfolio</div>
           <div className="text-muted-foreground text-sm">
@@ -210,32 +238,32 @@ function PortfolioContent() {
           </div>
         </div>
 
-        <div className="bt-panel p-12 flex flex-col items-center justify-center text-center">
-          <Briefcase size={48} className="mb-4 opacity-30" />
-          <h3 className="text-lg font-semibold mb-2">No holdings yet</h3>
-          <p className="text-sm text-muted-foreground mb-6 max-w-md">
-            Add your first position to see portfolio analytics, sector
-            allocation, AI-generated insights, and more.
-          </p>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setShowForm(true)}
-              className="bt-button-primary h-10 px-6 gap-2"
-            >
-              <Plus size={14} />
-              Add Holding
-            </button>
-            <button
-              type="button"
-              className="bt-button h-10 px-6 gap-2 opacity-50 cursor-not-allowed"
-              title="CSV import coming soon"
-              disabled
-            >
-              <Upload size={14} />
-              Import CSV
-            </button>
+        {/* Compact empty state card */}
+        <div className="bt-panel p-6 flex flex-col items-center text-center">
+          <div className="h-12 w-12 rounded-2xl bg-muted/40 flex items-center justify-center mb-3">
+            <Briefcase size={22} className="text-muted-foreground" />
           </div>
+          <h3 className="text-base font-semibold mb-1">No holdings yet</h3>
+          <p className="text-sm text-muted-foreground mb-4 max-w-xs">
+            Add a position to see analytics, allocation, and AI insights.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="bt-button-primary w-full max-w-xs gap-2"
+          >
+            <Plus size={16} />
+            Add Holding
+          </button>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 mt-3 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            title="CSV import coming soon"
+            disabled
+          >
+            <Upload size={14} />
+            Import CSV
+          </button>
         </div>
 
         {showForm && (
@@ -244,6 +272,25 @@ function PortfolioContent() {
             onCancel={() => setShowForm(false)}
           />
         )}
+
+        {/* Preview modules */}
+        <PerformancePreview />
+
+        <div className="flex gap-2">
+          {[
+            { label: "P&L", icon: BarChart3 },
+            { label: "Allocation", icon: PieChart },
+            { label: "Risk", icon: ShieldAlert },
+          ].map(({ label, icon: Icon }) => (
+            <div
+              key={label}
+              className="flex-1 bt-panel p-3 flex items-center gap-2 opacity-40"
+            >
+              <Icon size={14} className="text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">{label}</span>
+            </div>
+          ))}
+        </div>
 
         <div className="text-xs text-muted-foreground">
           {COMPLIANCE.PORTFOLIO_DISCLAIMER}
@@ -269,7 +316,7 @@ function PortfolioContent() {
         <button
           type="button"
           onClick={() => setShowForm(!showForm)}
-          className="bt-button h-10 gap-2"
+          className="bt-button gap-2"
         >
           <Plus size={14} />
           Add Holding
