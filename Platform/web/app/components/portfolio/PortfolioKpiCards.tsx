@@ -52,7 +52,7 @@ export function PortfolioKpiCards({ totals }: Props) {
   ];
 
   return (
-    <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-6">
       {cards.map((c) => (
         <div key={c.label} className="bt-panel p-4">
           <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">

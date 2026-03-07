@@ -64,14 +64,16 @@ export function HoldingsTable({ holdings, onRemoveHolding }: Props) {
     label,
     field,
     align = "right",
+    className: extraClass = "",
   }: {
     label: string;
     field: SortKey;
     align?: "left" | "right";
+    className?: string;
   }) {
     return (
       <th
-        className={`text-${align} px-4 py-2.5 font-medium cursor-pointer select-none hover:text-foreground`}
+        className={`${align === "left" ? "text-left" : "text-right"} px-2 py-2 sm:px-4 sm:py-2.5 font-medium cursor-pointer select-none hover:text-foreground ${extraClass}`}
         onClick={() => toggleSort(field)}
       >
         <span className="inline-flex items-center gap-1">
@@ -87,19 +89,19 @@ export function HoldingsTable({ holdings, onRemoveHolding }: Props) {
   return (
     <div className="bt-panel overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-xs sm:text-sm">
           <thead className="bg-panel-2">
             <tr className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
               <SortHeader label="Ticker" field="ticker" align="left" />
-              <th className="hidden sm:table-cell text-left px-4 py-2.5 font-medium">Sector</th>
-              <th className="hidden sm:table-cell text-right px-4 py-2.5 font-medium">Shares</th>
-              <th className="hidden sm:table-cell text-right px-4 py-2.5 font-medium">Avg Cost</th>
+              <th className="hidden md:table-cell text-left px-4 py-2.5 font-medium">Sector</th>
+              <th className="hidden md:table-cell text-right px-4 py-2.5 font-medium">Shares</th>
+              <th className="hidden md:table-cell text-right px-4 py-2.5 font-medium">Avg Cost</th>
               <th className="hidden lg:table-cell text-right px-4 py-2.5 font-medium">Price</th>
               <SortHeader label="Value" field="marketValue" />
-              <SortHeader label="P/L ($)" field="unrealizedPL" />
-              <SortHeader label="P/L (%)" field="unrealizedPLPct" />
-              <SortHeader label="Weight %" field="weightPct" />
-              <th className="text-center px-2 py-2.5 font-medium w-8" />
+              <SortHeader label="P/L" field="unrealizedPL" className="hidden sm:table-cell" />
+              <SortHeader label="P/L %" field="unrealizedPLPct" />
+              <SortHeader label="Wt %" field="weightPct" className="hidden sm:table-cell" />
+              <th className="px-1 py-2 sm:px-2 sm:py-2.5 font-medium w-8" />
             </tr>
           </thead>
           <tbody>
@@ -108,46 +110,46 @@ export function HoldingsTable({ holdings, onRemoveHolding }: Props) {
                 key={h.ticker}
                 className="border-t border-border hover:bg-muted/30"
               >
-                <td className="px-3 py-2.5 sm:px-4">
+                <td className="px-2 py-2 sm:px-4 sm:py-2.5">
                   <Link
                     href={`/stocks/${h.ticker}`}
                     className="font-mono font-semibold hover:underline"
                   >
                     {h.ticker}
                   </Link>
-                  <div className="text-[10px] text-muted-foreground truncate max-w-[120px]">
+                  <div className="text-[10px] text-muted-foreground truncate max-w-[100px] sm:max-w-[120px]">
                     {h.name}
                   </div>
                 </td>
-                <td className="hidden sm:table-cell px-4 py-2.5 text-xs text-muted-foreground">
+                <td className="hidden md:table-cell px-4 py-2.5 text-xs text-muted-foreground">
                   {h.sector}
                 </td>
-                <td className="hidden sm:table-cell text-right px-4 py-2.5 font-mono">
+                <td className="hidden md:table-cell text-right px-4 py-2.5 font-mono">
                   {h.shares}
                 </td>
-                <td className="hidden sm:table-cell text-right px-4 py-2.5 font-mono">
+                <td className="hidden md:table-cell text-right px-4 py-2.5 font-mono">
                   {formatCurrency(h.avgCost)}
                 </td>
                 <td className="hidden lg:table-cell text-right px-4 py-2.5 font-mono">
                   {formatCurrency(h.price)}
                 </td>
-                <td className="text-right px-3 py-2.5 sm:px-4 font-mono">
+                <td className="text-right px-2 py-2 sm:px-4 sm:py-2.5 font-mono">
                   {formatCurrency(h.marketValue)}
                 </td>
                 <td
-                  className={`text-right px-3 py-2.5 sm:px-4 font-mono ${plColor(h.unrealizedPL)}`}
+                  className={`hidden sm:table-cell text-right px-4 py-2.5 font-mono ${plColor(h.unrealizedPL)}`}
                 >
                   {formatCurrency(h.unrealizedPL)}
                 </td>
                 <td
-                  className={`text-right px-3 py-2.5 sm:px-4 font-mono ${plColor(h.unrealizedPLPct)}`}
+                  className={`text-right px-2 py-2 sm:px-4 sm:py-2.5 font-mono ${plColor(h.unrealizedPLPct)}`}
                 >
                   {formatPct(h.unrealizedPLPct)}
                 </td>
-                <td className="text-right px-3 py-2.5 sm:px-4 font-mono text-muted-foreground">
+                <td className="hidden sm:table-cell text-right px-4 py-2.5 font-mono text-muted-foreground">
                   {h.weightPct.toFixed(1)}%
                 </td>
-                <td className="text-center px-2 py-2.5">
+                <td className="text-center px-1 py-2 sm:px-2 sm:py-2.5">
                   <button
                     type="button"
                     onClick={() => onRemoveHolding(h.ticker)}

@@ -304,10 +304,10 @@ function PortfolioContent() {
   const contributors = summary?.contributors;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <div className="text-2xl font-semibold">My Portfolio</div>
           <div className="text-muted-foreground text-sm">
             Track your holdings, sector allocation, and unrealized performance.
